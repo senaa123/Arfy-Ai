@@ -1,0 +1,15 @@
+{
+  "personal": {
+    "name": "Senaa",
+    "hometown": "Eheliyagoda, Sri Lanka",
+    "current_residence": "Malabe, Colombo",
+    "location": "Malabe",
+    "key": "current_location",
+    "value": "Eheliyagoda"
+  },
+  "preferences": {
+    "interests": "cooking, news, TV shows",
+    "hobbies": "gaming, listening to music"
+  },
+  "corrections": {}
+}

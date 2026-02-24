@@ -1,0 +1,22 @@
+torch --index-url https://download.pytorch.org/whl/cu121
+torchvision --index-url https://download.pytorch.org/whl/cu121
+torchaudio --index-url https://download.pytorch.org/whl/cu121
+faster-whisper
+speechrecognition
+pyaudio
+edge-tts
+pygame
+PyQt6
+PyOpenGL
+PyOpenGL-accelerate
+requests
+python-dotenv
+ddgs
+spotipy
+resemblyzer
+numpy
+pystray
+Pillow
+pyttsx3
+groq
+nvidia-cudnn-cu11
