@@ -19,4 +19,4 @@ pystray
 Pillow
 pyttsx3
 groq
-nvidia-cudnn-cu11
+nvidia-cudnn-cu12
