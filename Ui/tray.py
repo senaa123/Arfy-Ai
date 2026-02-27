@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
-from PyQt6.QtGui import QIcon, QPixmap, QColor
+from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter
 from PyQt6.QtCore import Qt
 
 class ArfyTray(QSystemTrayIcon):
@@ -7,10 +7,8 @@ class ArfyTray(QSystemTrayIcon):
         super().__init__(parent)
         self.window = window
 
-        # create simple blue dot icon
         pixmap = QPixmap(32, 32)
         pixmap.fill(QColor(0, 0, 0, 0))
-        from PyQt6.QtGui import QPainter
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setBrush(QColor(0, 191, 255))
@@ -21,7 +19,6 @@ class ArfyTray(QSystemTrayIcon):
         self.setIcon(QIcon(pixmap))
         self.setToolTip("Arfy AI")
 
-        # tray menu
         menu = QMenu()
         show_action = menu.addAction("Show Arfy")
         show_action.triggered.connect(self.window.show)

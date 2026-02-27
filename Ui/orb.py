@@ -1,6 +1,5 @@
-# ui/orb.py
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np
@@ -8,7 +7,7 @@ import math
 import time
 
 class JarvisOrb(QOpenGLWidget):
-    
+
     STATE_IDLE = "idle"
     STATE_LISTENING = "listening"
     STATE_SPEAKING = "speaking"
@@ -19,37 +18,32 @@ class JarvisOrb(QOpenGLWidget):
         self.state = self.STATE_IDLE
         self.angle = 0.0
         self.pulse = 0.0
-        self.energy = 0.0
         self.rings = []
         self.particles = []
         self.start_time = time.time()
-
         self._init_rings()
         self._init_particles()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_animation)
-        self.timer.start(16)  # 60fps
+        self.timer.start(16)
 
     def _init_rings(self):
         self.rings = [
-            {"radius": 0.3, "tilt": 0, "speed": 0.8, "angle": 0},
+            {"radius": 0.3, "tilt": 0,  "speed": 0.8,  "angle": 0},
             {"radius": 0.5, "tilt": 45, "speed": -0.5, "angle": 120},
-            {"radius": 0.7, "tilt": 75, "speed": 0.6, "angle": 240},
-            {"radius": 0.45, "tilt": 20, "speed": -0.9, "angle": 60},
-            {"radius": 0.6, "tilt": 60, "speed": 0.4, "angle": 180},
+            {"radius": 0.7, "tilt": 75, "speed": 0.6,  "angle": 240},
+            {"radius": 0.45,"tilt": 20, "speed": -0.9, "angle": 60},
+            {"radius": 0.6, "tilt": 60, "speed": 0.4,  "angle": 180},
         ]
 
     def _init_particles(self):
         self.particles = []
         for _ in range(80):
-            angle = np.random.uniform(0, 2 * math.pi)
-            radius = np.random.uniform(0.2, 0.8)
-            speed = np.random.uniform(0.3, 1.2)
             self.particles.append({
-                "angle": angle,
-                "radius": radius,
-                "speed": speed,
+                "angle": np.random.uniform(0, 2 * math.pi),
+                "radius": np.random.uniform(0.2, 0.8),
+                "speed": np.random.uniform(0.3, 1.2),
                 "size": np.random.uniform(1, 3),
                 "brightness": np.random.uniform(0.3, 1.0)
             })
@@ -58,15 +52,12 @@ class JarvisOrb(QOpenGLWidget):
         self.state = state
 
     def get_speed_multiplier(self):
-        if self.state == self.STATE_IDLE:
-            return 0.5
-        elif self.state == self.STATE_LISTENING:
-            return 1.5
-        elif self.state == self.STATE_SPEAKING:
-            return 2.5
-        elif self.state == self.STATE_THINKING:
-            return 1.0
-        return 1.0
+        return {
+            self.STATE_IDLE: 0.5,
+            self.STATE_LISTENING: 1.5,
+            self.STATE_SPEAKING: 2.5,
+            self.STATE_THINKING: 1.0
+        }.get(self.state, 1.0)
 
     def get_glow_intensity(self):
         if self.state == self.STATE_IDLE:
@@ -83,13 +74,10 @@ class JarvisOrb(QOpenGLWidget):
         speed = self.get_speed_multiplier()
         self.angle += 0.5 * speed
         self.pulse = math.sin(time.time() * 2) * 0.5 + 0.5
-
         for ring in self.rings:
             ring["angle"] += ring["speed"] * speed
-
         for particle in self.particles:
             particle["angle"] += particle["speed"] * 0.01 * speed
-
         self.update()
 
     def initializeGL(self):
@@ -111,27 +99,16 @@ class JarvisOrb(QOpenGLWidget):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         glTranslatef(0, 0, -3)
-
         intensity = self.get_glow_intensity()
-
-        # draw core glow
         self._draw_core(intensity)
-
-        # draw rings
         for ring in self.rings:
             self._draw_ring(ring, intensity)
-
-        # draw particles
         self._draw_particles(intensity)
-
-        # draw outer energy field
         self._draw_energy_field(intensity)
 
     def _draw_core(self, intensity):
         glPushMatrix()
         glRotatef(self.angle, 0, 1, 0)
-
-        # inner core
         for layer in range(5):
             alpha = intensity * (1.0 - layer * 0.15)
             scale = 0.1 + layer * 0.04 + self.pulse * 0.02
@@ -140,14 +117,12 @@ class JarvisOrb(QOpenGLWidget):
             b = 1.0
             glColor4f(r, g, b, alpha)
             self._draw_circle(scale, 32)
-
         glPopMatrix()
 
     def _draw_ring(self, ring, intensity):
         glPushMatrix()
         glRotatef(ring["tilt"], 1, 0, 0)
         glRotatef(ring["angle"], 0, 1, 0)
-
         glLineWidth(1.0)
         segments = 64
         glBegin(GL_LINE_LOOP)
@@ -159,8 +134,6 @@ class JarvisOrb(QOpenGLWidget):
             glColor4f(0.0, brightness * 0.7 * intensity, intensity, brightness * intensity)
             glVertex3f(x, y, 0)
         glEnd()
-
-        # ring glow dots
         glPointSize(2.0)
         glBegin(GL_POINTS)
         for i in range(0, segments, 4):
@@ -170,7 +143,6 @@ class JarvisOrb(QOpenGLWidget):
             glColor4f(0.3, 0.8, 1.0, intensity * 0.8)
             glVertex3f(x, y, 0)
         glEnd()
-
         glPopMatrix()
 
     def _draw_particles(self, intensity):
@@ -180,15 +152,13 @@ class JarvisOrb(QOpenGLWidget):
             x = p["radius"] * math.cos(p["angle"])
             y = p["radius"] * math.sin(p["angle"]) * 0.5
             z = p["radius"] * math.sin(p["angle"] * 0.7)
-            alpha = p["brightness"] * intensity
-            glColor4f(0.2, 0.7, 1.0, alpha)
+            glColor4f(0.2, 0.7, 1.0, p["brightness"] * intensity)
             glVertex3f(x, y, z)
         glEnd()
 
     def _draw_energy_field(self, intensity):
         glPushMatrix()
         glRotatef(self.angle * 0.3, 0, 1, 0)
-
         segments = 128
         for layer in range(3):
             radius = 0.85 + layer * 0.05 + self.pulse * 0.03
@@ -203,12 +173,12 @@ class JarvisOrb(QOpenGLWidget):
                 glColor4f(0.0, 0.5, 1.0, alpha)
                 glVertex3f(r, y, z)
             glEnd()
-
         glPopMatrix()
 
     def _draw_circle(self, radius, segments):
         glBegin(GL_LINE_LOOP)
         for i in range(segments):
             theta = 2 * math.pi * i / segments
-            glVertex3f(radius * math.cos(theta), radius * math.sin(theta), 0)
+            glVertex3f(radius * math.cos(theta),
+                      radius * math.sin(theta), 0)
         glEnd()

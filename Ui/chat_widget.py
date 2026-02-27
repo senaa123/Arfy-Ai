@@ -17,7 +17,7 @@ class ChatWidget(QTextEdit):
             color = "#00BFFF"
             prefix = "▶ YOU"
         else:
-            color = "#0055AA"
+            color = "#0088CC"
             prefix = "◈ ARFY"
 
         html = f'<p style="color:{color}; font-family: Courier New; font-size: 11px; margin: 4px 0;"><b>{prefix}:</b> {message}</p>'
