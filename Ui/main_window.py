@@ -11,7 +11,7 @@ class HUDFrame(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pen = QPen(QColor(0, 191, 255, 180))
+        pen = QPen(QColor(255, 255, 255, 120))  # white corners
         pen.setWidth(2)
         painter.setPen(pen)
 
@@ -76,7 +76,7 @@ class ArfyWindow(QMainWindow):
 
         # HUD style indicators
         indicator = QLabel("● SYS ONLINE")
-        indicator.setStyleSheet("color: #00FF88; font-size: 9px; letter-spacing: 2px;")
+        indicator.setStyleSheet("color: #FFFFFF; font-size: 9px; letter-spacing: 2px;")
 
         min_btn = QPushButton("─")
         min_btn.setObjectName("minimizeBtn")
@@ -107,9 +107,11 @@ class ArfyWindow(QMainWindow):
         # HUD bottom info bar
         info_bar = QHBoxLayout()
         self.fps_label = QLabel("SYS: ACTIVE")
-        self.fps_label.setStyleSheet("color: #003366; font-size: 9px; letter-spacing: 1px;")
+        self.fps_label.setStyleSheet("color: #444444; font-size: 9px; letter-spacing: 1px;")
+
         version_label = QLabel("ARFY v1.0")
-        version_label.setStyleSheet("color: #003366; font-size: 9px; letter-spacing: 1px;")
+        version_label.setStyleSheet("color: #444444; font-size: 9px; letter-spacing: 1px;")
+
         info_bar.addWidget(self.fps_label)
         info_bar.addStretch()
         info_bar.addWidget(version_label)

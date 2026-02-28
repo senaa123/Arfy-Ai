@@ -9,7 +9,13 @@
   },
   "preferences": {
     "interests": "cooking, news, TV shows",
-    "hobbies": "gaming, listening to music"
+    "hobbies": "gaming, listening to music",
+    "key": "music_platform",
+    "value": "Spotify"
   },
-  "corrections": {}
+  "corrections": {},
+  "facts": {
+    "key": "repeated_locations",
+    "value": "Malabe, Eheliyagoda"
+  }
 }

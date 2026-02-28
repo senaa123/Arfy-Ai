@@ -2,9 +2,9 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtCore import QTimer
 from OpenGL.GL import *
 from OpenGL.GLU import *
-import numpy as np
 import math
 import time
+import random
 
 class JarvisOrb(QOpenGLWidget):
 
@@ -17,75 +17,161 @@ class JarvisOrb(QOpenGLWidget):
         super().__init__(parent)
         self.state = self.STATE_IDLE
         self.angle = 0.0
-        self.pulse = 0.0
-        self.rings = []
-        self.particles = []
         self.start_time = time.time()
-        self._init_rings()
-        self._init_particles()
+        self.nodes = []
+        self._init_nodes()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_animation)
         self.timer.start(16)
 
-    def _init_rings(self):
-        self.rings = [
-            {"radius": 0.3, "tilt": 0,  "speed": 0.8,  "angle": 0},
-            {"radius": 0.5, "tilt": 45, "speed": -0.5, "angle": 120},
-            {"radius": 0.7, "tilt": 75, "speed": 0.6,  "angle": 240},
-            {"radius": 0.45,"tilt": 20, "speed": -0.9, "angle": 60},
-            {"radius": 0.6, "tilt": 60, "speed": 0.4,  "angle": 180},
-        ]
+    def _init_nodes(self):
+        self.nodes = []
+        for _ in range(50):
+            theta = random.uniform(0, 2 * math.pi)
+            phi = random.uniform(0, math.pi)
+            r = random.uniform(0.3, 0.85)
 
-    def _init_particles(self):
-        self.particles = []
-        for _ in range(80):
-            self.particles.append({
-                "angle": np.random.uniform(0, 2 * math.pi),
-                "radius": np.random.uniform(0.2, 0.8),
-                "speed": np.random.uniform(0.3, 1.2),
-                "size": np.random.uniform(1, 3),
-                "brightness": np.random.uniform(0.3, 1.0)
+            x = r * math.sin(phi) * math.cos(theta)
+            y = r * math.sin(phi) * math.sin(theta) * 0.65
+            z = r * math.cos(phi) * 0.5
+
+            self.nodes.append({
+                # original resting position
+                "ox": x, "oy": y, "oz": z,
+                # current position
+                "x": x, "y": y, "z": z,
+                # velocity
+                "vx": 0.0, "vy": 0.0, "vz": 0.0,
+                # unique motion personality
+                "freq": random.uniform(0.2, 0.8),
+                "phase": random.uniform(0, 2 * math.pi),
+                "amp_idle": random.uniform(0.005, 0.015),
+                "amp_listen": random.uniform(0.02, 0.04),
+                "amp_speak": random.uniform(0.06, 0.12),
+                "pulse_offset": random.uniform(0, 2 * math.pi),
+                "brightness": random.uniform(0.6, 1.0),
+                "size": random.uniform(2.0, 4.5),
+                # trail
+                "trail": [],
+                "trail_max": 15,
             })
+
+    def _get_connections(self):
+        connections = []
+        for i in range(len(self.nodes)):
+            for j in range(i + 1, len(self.nodes)):
+                n1 = self.nodes[i]
+                n2 = self.nodes[j]
+                dist = math.sqrt(
+                    (n1["x"] - n2["x"]) ** 2 +
+                    (n1["y"] - n2["y"]) ** 2 +
+                    (n1["z"] - n2["z"]) ** 2
+                )
+                if dist < 0.5:
+                    connections.append((i, j, dist))
+        return connections
 
     def set_state(self, state):
         self.state = state
 
-    def get_speed_multiplier(self):
-        return {
-            self.STATE_IDLE: 0.5,
-            self.STATE_LISTENING: 1.5,
-            self.STATE_SPEAKING: 2.5,
-            self.STATE_THINKING: 1.0
-        }.get(self.state, 1.0)
-
-    def get_glow_intensity(self):
-        if self.state == self.STATE_IDLE:
-            return 0.4
-        elif self.state == self.STATE_LISTENING:
-            return 0.8
-        elif self.state == self.STATE_SPEAKING:
-            return 1.0
-        elif self.state == self.STATE_THINKING:
-            return 0.6 + 0.3 * math.sin(time.time() * 5)
-        return 0.5
-
     def update_animation(self):
-        speed = self.get_speed_multiplier()
-        self.angle += 0.5 * speed
-        self.pulse = math.sin(time.time() * 2) * 0.5 + 0.5
-        for ring in self.rings:
-            ring["angle"] += ring["speed"] * speed
-        for particle in self.particles:
-            particle["angle"] += particle["speed"] * 0.01 * speed
+        t = time.time()
+
+        # slow gentle rotation always
+        if self.state == self.STATE_IDLE:
+            self.angle += 0.08
+        elif self.state == self.STATE_LISTENING:
+            self.angle += 0.12
+        elif self.state == self.STATE_SPEAKING:
+            self.angle += 0.25
+        elif self.state == self.STATE_THINKING:
+            self.angle += 0.10
+
+        for node in self.nodes:
+            # save trail
+            node["trail"].append((node["x"], node["y"], node["z"]))
+            if len(node["trail"]) > node["trail_max"]:
+                node["trail"].pop(0)
+
+            ox, oy, oz = node["ox"], node["oy"], node["oz"]
+
+            if self.state == self.STATE_IDLE:
+                # barely breathing — tiny sine drift around origin
+                amp = node["amp_idle"]
+                node["x"] = ox + amp * math.sin(t * node["freq"] + node["phase"])
+                node["y"] = oy + amp * math.cos(t * node["freq"] * 0.7 + node["phase"])
+                node["z"] = oz + amp * math.sin(t * node["freq"] * 0.5 + node["phase"])
+
+            elif self.state == self.STATE_LISTENING:
+                # slightly more movement, aware but calm
+                amp = node["amp_listen"]
+                node["x"] = ox + amp * math.sin(t * node["freq"] * 1.5 + node["phase"])
+                node["y"] = oy + amp * math.cos(t * node["freq"] * 1.2 + node["phase"])
+                node["z"] = oz + amp * math.sin(t * node["freq"] + node["phase"] + 0.5)
+
+            elif self.state == self.STATE_THINKING:
+                # fold inward and stretch outward alternating
+                fold = math.sin(t * 0.8 + node["phase"])  # -1 to 1
+                if fold > 0:
+                    # stretching outward
+                    scale = 1.0 + fold * 0.4
+                else:
+                    # folding inward
+                    scale = 1.0 + fold * 0.3
+
+                amp = node["amp_listen"] * 1.5
+                node["x"] = ox * scale + amp * math.sin(t * node["freq"] * 2 + node["phase"])
+                node["y"] = oy * scale + amp * math.cos(t * node["freq"] * 1.5 + node["phase"])
+                node["z"] = oz * scale + amp * math.sin(t * node["freq"] + node["phase"])
+
+            elif self.state == self.STATE_SPEAKING:
+                # active movement — particles travel around freely
+                amp = node["amp_speak"]
+                # fast organic wandering
+                node["vx"] += amp * math.sin(t * node["freq"] * 3 + node["phase"]) * 0.08
+                node["vy"] += amp * math.cos(t * node["freq"] * 2.5 + node["phase"]) * 0.08
+                node["vz"] += amp * math.sin(t * node["freq"] * 2 + node["phase"] + 1) * 0.08
+
+                # damping so they don't fly away
+                node["vx"] *= 0.92
+                node["vy"] *= 0.92
+                node["vz"] *= 0.92
+
+                # spring back toward origin loosely
+                node["vx"] += (ox - node["x"]) * 0.015
+                node["vy"] += (oy - node["y"]) * 0.015
+                node["vz"] += (oz - node["z"]) * 0.015
+
+                node["x"] += node["vx"]
+                node["y"] += node["vy"]
+                node["z"] += node["vz"]
+
+            # pulse brightness
+            node["brightness"] = 0.55 + 0.45 * math.sin(t * 1.5 + node["pulse_offset"])
+
         self.update()
+
+    def get_global_brightness(self):
+        t = time.time()
+        if self.state == self.STATE_IDLE:
+            return 0.35 + 0.08 * math.sin(t * 0.6)
+        elif self.state == self.STATE_LISTENING:
+            return 0.6 + 0.1 * math.sin(t * 2)
+        elif self.state == self.STATE_SPEAKING:
+            return 0.8 + 0.2 * math.sin(t * 10)
+        elif self.state == self.STATE_THINKING:
+            return 0.5 + 0.2 * math.sin(t * 4) * math.sin(t * 1.7)
+        return 0.5
 
     def initializeGL(self):
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE)
         glEnable(GL_LINE_SMOOTH)
+        glEnable(GL_POINT_SMOOTH)
         glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
-        glClearColor(0.0, 0.02, 0.05, 1.0)
+        glHint(GL_POINT_SMOOTH_HINT, GL_NICEST)
+        glClearColor(0.0, 0.0, 0.0, 1.0)
 
     def resizeGL(self, w, h):
         glViewport(0, 0, w, h)
@@ -99,86 +185,93 @@ class JarvisOrb(QOpenGLWidget):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         glTranslatef(0, 0, -3)
-        intensity = self.get_glow_intensity()
-        self._draw_core(intensity)
-        for ring in self.rings:
-            self._draw_ring(ring, intensity)
-        self._draw_particles(intensity)
-        self._draw_energy_field(intensity)
+        glRotatef(self.angle, 0, 1, 0.1)
 
-    def _draw_core(self, intensity):
-        glPushMatrix()
-        glRotatef(self.angle, 0, 1, 0)
-        for layer in range(5):
-            alpha = intensity * (1.0 - layer * 0.15)
-            scale = 0.1 + layer * 0.04 + self.pulse * 0.02
-            r = 0.1 + layer * 0.05
-            g = 0.5 + layer * 0.1
-            b = 1.0
-            glColor4f(r, g, b, alpha)
-            self._draw_circle(scale, 32)
-        glPopMatrix()
+        brightness = self.get_global_brightness()
+        connections = self._get_connections()
 
-    def _draw_ring(self, ring, intensity):
-        glPushMatrix()
-        glRotatef(ring["tilt"], 1, 0, 0)
-        glRotatef(ring["angle"], 0, 1, 0)
-        glLineWidth(1.0)
-        segments = 64
-        glBegin(GL_LINE_LOOP)
-        for i in range(segments):
-            theta = 2 * math.pi * i / segments
-            x = ring["radius"] * math.cos(theta)
-            y = ring["radius"] * math.sin(theta)
-            brightness = 0.5 + 0.5 * math.sin(theta * 3 + ring["angle"] * 0.1)
-            glColor4f(0.0, brightness * 0.7 * intensity, intensity, brightness * intensity)
-            glVertex3f(x, y, 0)
-        glEnd()
-        glPointSize(2.0)
-        glBegin(GL_POINTS)
-        for i in range(0, segments, 4):
-            theta = 2 * math.pi * i / segments
-            x = ring["radius"] * math.cos(theta)
-            y = ring["radius"] * math.sin(theta)
-            glColor4f(0.3, 0.8, 1.0, intensity * 0.8)
-            glVertex3f(x, y, 0)
-        glEnd()
-        glPopMatrix()
+        self._draw_trails(brightness)
+        self._draw_connections(connections, brightness)
+        self._draw_nodes(brightness)
 
-    def _draw_particles(self, intensity):
-        glPointSize(2.0)
-        glBegin(GL_POINTS)
-        for p in self.particles:
-            x = p["radius"] * math.cos(p["angle"])
-            y = p["radius"] * math.sin(p["angle"]) * 0.5
-            z = p["radius"] * math.sin(p["angle"] * 0.7)
-            glColor4f(0.2, 0.7, 1.0, p["brightness"] * intensity)
-            glVertex3f(x, y, z)
-        glEnd()
+    def _draw_trails(self, brightness):
+        # only draw trails when speaking or thinking
+        if self.state not in [self.STATE_SPEAKING, self.STATE_THINKING]:
+            return
 
-    def _draw_energy_field(self, intensity):
-        glPushMatrix()
-        glRotatef(self.angle * 0.3, 0, 1, 0)
-        segments = 128
-        for layer in range(3):
-            radius = 0.85 + layer * 0.05 + self.pulse * 0.03
-            glBegin(GL_LINE_LOOP)
-            for i in range(segments):
-                theta = 2 * math.pi * i / segments
-                noise = 0.02 * math.sin(theta * 8 + self.angle * 0.05)
-                r = (radius + noise) * math.cos(theta)
-                y = (radius + noise) * math.sin(theta) * 0.6
-                z = (radius + noise) * math.sin(theta) * 0.3
-                alpha = (0.3 - layer * 0.08) * intensity
-                glColor4f(0.0, 0.5, 1.0, alpha)
-                glVertex3f(r, y, z)
+        for node in self.nodes:
+            trail = node["trail"]
+            if len(trail) < 2:
+                continue
+
+            glBegin(GL_LINE_STRIP)
+            for idx, (tx, ty, tz) in enumerate(trail):
+                progress = idx / len(trail)
+                if self.state == self.STATE_SPEAKING:
+                    alpha = brightness * progress * 0.35 * node["brightness"]
+                else:
+                    alpha = brightness * progress * 0.2 * node["brightness"]
+                glColor4f(1.0, 1.0, 1.0, alpha)
+                glVertex3f(tx, ty, tz)
             glEnd()
-        glPopMatrix()
 
-    def _draw_circle(self, radius, segments):
-        glBegin(GL_LINE_LOOP)
-        for i in range(segments):
-            theta = 2 * math.pi * i / segments
-            glVertex3f(radius * math.cos(theta),
-                      radius * math.sin(theta), 0)
-        glEnd()
+    def _draw_connections(self, connections, brightness):
+        t = time.time()
+        for i, j, dist in connections:
+            n1 = self.nodes[i]
+            n2 = self.nodes[j]
+
+            base_alpha = brightness * (1.0 - dist / 0.5) * 0.45
+
+            if self.state == self.STATE_IDLE:
+                alpha = base_alpha * 0.6
+            elif self.state == self.STATE_LISTENING:
+                alpha = base_alpha * 0.8
+            elif self.state == self.STATE_SPEAKING:
+                alpha = base_alpha * (0.5 + 0.5 * math.sin(t * 18 + dist * 12))
+            elif self.state == self.STATE_THINKING:
+                alpha = base_alpha * (0.4 + 0.6 * abs(math.sin(t * 3 + dist * 6)))
+            else:
+                alpha = base_alpha
+
+            glLineWidth(0.7)
+            glBegin(GL_LINES)
+            glColor4f(1.0, 1.0, 1.0, alpha)
+            glVertex3f(n1["x"], n1["y"], n1["z"])
+            glColor4f(1.0, 1.0, 1.0, alpha * 0.2)
+            glVertex3f(n2["x"], n2["y"], n2["z"])
+            glEnd()
+
+    def _draw_nodes(self, brightness):
+        t = time.time()
+        for node in self.nodes:
+            alpha = brightness * node["brightness"]
+            size = node["size"]
+
+            if self.state == self.STATE_SPEAKING:
+                size *= 1.4 + 0.4 * math.sin(t * 10 + node["pulse_offset"])
+            elif self.state == self.STATE_LISTENING:
+                size *= 1.1 + 0.1 * math.sin(t * 4 + node["pulse_offset"])
+            elif self.state == self.STATE_THINKING:
+                size *= 1.0 + 0.3 * abs(math.sin(t * 2 + node["pulse_offset"]))
+
+            # soft outer glow
+            glPointSize(size * 3.5)
+            glBegin(GL_POINTS)
+            glColor4f(1.0, 1.0, 1.0, alpha * 0.05)
+            glVertex3f(node["x"], node["y"], node["z"])
+            glEnd()
+
+            # mid glow
+            glPointSize(size * 2)
+            glBegin(GL_POINTS)
+            glColor4f(1.0, 1.0, 1.0, alpha * 0.15)
+            glVertex3f(node["x"], node["y"], node["z"])
+            glEnd()
+
+            # bright core
+            glPointSize(size * 0.8)
+            glBegin(GL_POINTS)
+            glColor4f(1.0, 1.0, 1.0, alpha)
+            glVertex3f(node["x"], node["y"], node["z"])
+            glEnd()

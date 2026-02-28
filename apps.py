@@ -1,4 +1,5 @@
 # apps.py
+import string
 import subprocess
 
 APP = {
@@ -40,7 +41,7 @@ def parse_command(text):
         return ("open_app", app)
     
     elif "close" in text:
-        app = text.split("close")[-1].strip()
+        app = text.split("close")[-1].strip(string.punctuation)
         return ("close_app", app)
     
     elif "play" in text:
