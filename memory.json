@@ -3,19 +3,19 @@
     "name": "Senaa",
     "hometown": "Eheliyagoda, Sri Lanka",
     "current_residence": "Malabe, Colombo",
-    "location": "Malabe",
-    "key": "current_location",
-    "value": "Eheliyagoda"
+    "location": "Eheliyagoda",
+    "languages_spoken": "unknown, possibly Sinhala",
+    "location_tomorrow": "Eheliyagoda",
+    "current_location": "Eheliyagoda"
   },
   "preferences": {
-    "interests": "cooking, news, TV shows",
-    "hobbies": "gaming, listening to music",
-    "key": "music_platform",
-    "value": "Spotify"
+    "interests": "news",
+    "hobbies": "gaming, listening to music, Minecraft",
+    "music_platform": "Spotify",
+    "note_taking_tool": "Slate"
   },
   "corrections": {},
   "facts": {
-    "key": "repeated_locations",
-    "value": "Malabe, Eheliyagoda"
+    "repeated_locations": "Malabe, Eheliyagoda"
   }
 }

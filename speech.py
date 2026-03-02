@@ -71,10 +71,7 @@ def listen(time_limit=5):
 
 def listen_with_type_fallback(time_limit=5):
     text = listen(time_limit)
-    if text and any(phrase in text for phrase in ["let me type", "input field", "give me input", "i'll type", "let me write"]):
-        speak("Sure, please type your input.")
-        typed = input("Your input: ")
-        return typed.lower().strip()
+    
     return text
 
 def wait_for_wake_word():

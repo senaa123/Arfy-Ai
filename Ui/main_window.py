@@ -1,56 +1,50 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
-                              QHBoxLayout, QLabel, QPushButton)
-from PyQt6.QtCore import Qt, QPoint, pyqtSlot
+                              QHBoxLayout, QLabel, QPushButton,
+                              QLineEdit)
+from PyQt6.QtCore import Qt, QPoint, pyqtSlot, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen
 from Ui.orb import JarvisOrb
 from Ui.chat_widget import ChatWidget
 from Ui.styles import MAIN_STYLE
 
+
 class HUDFrame(QWidget):
-    """Draws Jarvis-style corner brackets around the window"""
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pen = QPen(QColor(255, 255, 255, 120))  # white corners
-        pen.setWidth(2)
+
+        pen = QPen(QColor(0, 191, 255, 80))
+        pen.setWidth(1)
         painter.setPen(pen)
 
         w, h = self.width(), self.height()
-        size = 20  # corner bracket size
+        size = 18
 
-        # top left
         painter.drawLine(0, 0, size, 0)
         painter.drawLine(0, 0, 0, size)
-
-        # top right
         painter.drawLine(w - size, 0, w, 0)
         painter.drawLine(w, 0, w, size)
-
-        # bottom left
         painter.drawLine(0, h - size, 0, h)
         painter.drawLine(0, h, size, h)
-
-        # bottom right
         painter.drawLine(w - size, h, w, h)
         painter.drawLine(w, h - size, w, h)
 
-        # subtle scan line effect
-        pen.setWidth(1)
-        pen.setColor(QColor(0, 191, 255, 20))
+        pen.setColor(QColor(0, 191, 255, 6))
         painter.setPen(pen)
         for y in range(0, h, 4):
             painter.drawLine(0, y, w, y)
 
 
 class ArfyWindow(QMainWindow):
+
+    text_submitted = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-        )
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet(MAIN_STYLE)
-        self.setFixedSize(380, 520)
+        self.setFixedSize(380, 540)
         self._drag_pos = QPoint()
         self._build_ui()
 
@@ -61,11 +55,11 @@ class ArfyWindow(QMainWindow):
 
         layout = QVBoxLayout(central)
         layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(10)
+        layout.setSpacing(8)
 
-        # HUD frame overlay
+        # HUD overlay
         self.hud = HUDFrame(central)
-        self.hud.setGeometry(0, 0, 380, 520)
+        self.hud.setGeometry(0, 0, 380, 540)
         self.hud.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         # title bar
@@ -74,9 +68,10 @@ class ArfyWindow(QMainWindow):
         title = QLabel("◈ A R F Y  A I")
         title.setObjectName("titleLabel")
 
-        # HUD style indicators
         indicator = QLabel("● SYS ONLINE")
-        indicator.setStyleSheet("color: #FFFFFF; font-size: 9px; letter-spacing: 2px;")
+        indicator.setStyleSheet(
+            "color: #00BFFF; font-size: 9px; letter-spacing: 2px;"
+        )
 
         min_btn = QPushButton("─")
         min_btn.setObjectName("minimizeBtn")
@@ -93,7 +88,7 @@ class ArfyWindow(QMainWindow):
         title_bar.addWidget(close_btn)
         layout.addLayout(title_bar)
 
-        # status label
+        # status
         self.status_label = QLabel("STANDBY MODE")
         self.status_label.setObjectName("statusLabel")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -101,18 +96,23 @@ class ArfyWindow(QMainWindow):
 
         # orb
         self.orb = JarvisOrb()
-        self.orb.setFixedHeight(250)
+        self.orb.setFixedHeight(260)
         layout.addWidget(self.orb)
 
-        # HUD bottom info bar
+        # bottom info
         info_bar = QHBoxLayout()
-        self.fps_label = QLabel("SYS: ACTIVE")
-        self.fps_label.setStyleSheet("color: #444444; font-size: 9px; letter-spacing: 1px;")
+
+        self.sys_label = QLabel("SYS: ACTIVE")
+        self.sys_label.setStyleSheet(
+            "color: #003366; font-size: 9px; letter-spacing: 1px;"
+        )
 
         version_label = QLabel("ARFY v1.0")
-        version_label.setStyleSheet("color: #444444; font-size: 9px; letter-spacing: 1px;")
+        version_label.setStyleSheet(
+            "color: #003366; font-size: 9px; letter-spacing: 1px;"
+        )
 
-        info_bar.addWidget(self.fps_label)
+        info_bar.addWidget(self.sys_label)
         info_bar.addStretch()
         info_bar.addWidget(version_label)
         layout.addLayout(info_bar)
@@ -121,18 +121,63 @@ class ArfyWindow(QMainWindow):
         self.chat = ChatWidget()
         layout.addWidget(self.chat)
 
+        # input field — hidden and disabled by default
+        self.input_widget = QWidget()
+        self.input_widget.setObjectName("inputWidget")
+        input_bar = QHBoxLayout(self.input_widget)
+        input_bar.setContentsMargins(0, 0, 0, 0)
+        input_bar.setSpacing(6)
+
+        self.text_input = QLineEdit()
+        self.text_input.setObjectName("textInput")
+        self.text_input.setPlaceholderText("type here...")
+        self.text_input.setEnabled(False)
+        self.text_input.returnPressed.connect(self._on_submit)
+
+        self.send_btn = QPushButton("→")
+        self.send_btn.setObjectName("sendBtn")
+        self.send_btn.setEnabled(False)
+        self.send_btn.clicked.connect(self._on_submit)
+
+        input_bar.addWidget(self.text_input)
+        input_bar.addWidget(self.send_btn)
+
+        self.input_widget.hide()
+        layout.addWidget(self.input_widget)
+
+    def _on_submit(self):
+        text = self.text_input.text().strip()
+        if text:
+            self.text_submitted.emit(text)
+            self.text_input.clear()
+            self.hide_input()
+
+    @pyqtSlot()
+    def show_input(self):
+        self.input_widget.show()
+        self.text_input.setEnabled(True)
+        self.send_btn.setEnabled(True)
+        self.text_input.setFocus()
+
+    @pyqtSlot()
+    def hide_input(self):
+        self.input_widget.hide()
+        self.text_input.setEnabled(False)
+        self.send_btn.setEnabled(False)
+        self.text_input.clear()
+
     @pyqtSlot(str)
     def set_state(self, state):
         self.orb.set_state(state)
         states = {
-            "idle": ("STANDBY MODE", "SYS: ACTIVE"),
-            "listening": ("── LISTENING ──", "SYS: AUDIO INPUT"),
-            "speaking": ("── SPEAKING ──", "SYS: AUDIO OUTPUT"),
-            "thinking": ("── PROCESSING ──", "SYS: COMPUTING")
+            "idle":      ("STANDBY MODE",     "SYS: ACTIVE"),
+            "listening": ("── LISTENING ──",  "SYS: AUDIO INPUT"),
+            "speaking":  ("── SPEAKING ──",   "SYS: AUDIO OUTPUT"),
+            "thinking":  ("── PROCESSING ──", "SYS: COMPUTING"),
         }
-        label, sys_label = states.get(state, ("STANDBY MODE", "SYS: ACTIVE"))
+        label, sys = states.get(state, ("STANDBY MODE", "SYS: ACTIVE"))
         self.status_label.setText(label)
-        self.fps_label.setText(sys_label)
+        self.sys_label.setText(sys)
 
     @pyqtSlot(str, str)
     def add_chat(self, sender, message):
@@ -140,7 +185,9 @@ class ArfyWindow(QMainWindow):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            self._drag_pos = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.MouseButton.LeftButton:

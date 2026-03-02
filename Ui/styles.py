@@ -1,55 +1,55 @@
 MAIN_STYLE = """
 QMainWindow, QWidget#mainWidget {
-    background-color: #000000;
-    border: 1px solid #222222;
+    background-color: #000510;
+    border: 1px solid #003366;
     border-radius: 5px;
 }
 
 QWidget {
     background-color: transparent;
-    color: #FFFFFF;
+    color: #00BFFF;
     font-family: 'Courier New', monospace;
 }
 
 QLabel#titleLabel {
-    color: #FFFFFF;
+    color: #00BFFF;
     font-size: 13px;
     font-weight: bold;
     letter-spacing: 4px;
 }
 
 QLabel#statusLabel {
-    color: #AAAAAA;
+    color: #0088CC;
     font-size: 11px;
     letter-spacing: 3px;
 }
 
-QTextEdit#chatBox {
-    background-color: #0A0A0A;
-    border: 1px solid #222222;
+QTextEdit#chatBox, QWidget#chatBox {
+    background-color: #000D1A;
+    border: 1px solid #003366;
     border-radius: 4px;
-    color: #FFFFFF;
+    color: #00BFFF;
     font-family: 'Courier New', monospace;
     font-size: 11px;
     padding: 8px;
 }
 
 QScrollBar:vertical {
-    background: #000000;
+    background: #000510;
     width: 4px;
     border-radius: 2px;
 }
 
 QScrollBar::handle:vertical {
-    background: #333333;
+    background: #003366;
     border-radius: 2px;
 }
 
 QPushButton#closeBtn {
     background-color: transparent;
-    border: 1px solid #333333;
+    border: 1px solid #003366;
     border-radius: 10px;
-    color: #FFFFFF;
+    color: #00BFFF;
     font-size: 12px;
     min-width: 20px;
     min-height: 20px;
@@ -65,9 +65,9 @@ QPushButton#closeBtn:hover {
 
 QPushButton#minimizeBtn {
     background-color: transparent;
-    border: 1px solid #333333;
+    border: 1px solid #003366;
     border-radius: 10px;
-    color: #FFFFFF;
+    color: #00BFFF;
     font-size: 12px;
     min-width: 20px;
     min-height: 20px;
@@ -76,7 +76,37 @@ QPushButton#minimizeBtn {
 }
 
 QPushButton#minimizeBtn:hover {
-    background-color: #333333;
-    color: white;
+    background-color: #003366;
+    color: #00BFFF;
+}
+QLineEdit#textInput {
+    background-color: #000D1A;
+    border: 1px solid #003366;
+    border-radius: 4px;
+    color: #00BFFF;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 6px 8px;
+}
+
+QLineEdit#textInput:focus {
+    border: 1px solid #00BFFF;
+}
+
+QPushButton#sendBtn {
+    background-color: #003366;
+    border: 1px solid #00BFFF;
+    border-radius: 4px;
+    color: #00BFFF;
+    font-size: 14px;
+    min-width: 30px;
+    min-height: 28px;
+    max-width: 30px;
+    max-height: 28px;
+}
+
+QPushButton#sendBtn:hover {
+    background-color: #00BFFF;
+    color: #000510;
 }
 """

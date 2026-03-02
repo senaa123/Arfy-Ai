@@ -5,7 +5,7 @@ import subprocess
 APP = {
     "chrome": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     "notepad": "notepad.exe",
-    "calculator": "CalculatorApp",
+    "calculator": "calc.exe",
     "spotify": r"C:\Users\ASUS\AppData\Roaming\Spotify\Spotify.exe",
     "file explorer": "explorer.exe",
     "vscode": r"C:\Users\ASUS\AppData\Local\Programs\Microsoft VS Code\code.exe",
@@ -14,6 +14,9 @@ APP = {
 def open_app(app_name):
     if not app_name:
         return False
+    
+    app_name = app_name.lower().strip()
+
     if app_name in APP:
         path = APP[app_name]
         subprocess.Popen(f'"{path}"', shell=True)
@@ -37,8 +40,12 @@ def parse_command(text):
     
     text = text.lower()
     if "open" in text:
-        app = text.split("open")[-1].strip()
-        return ("open_app", app)
+        words = text.split()
+        
+        for word in words:
+            clean_word = word.strip(string.punctuation)
+            if clean_word in APP:
+                return ("open_app", clean_word)
     
     elif "close" in text:
         app = text.split("close")[-1].strip(string.punctuation)
