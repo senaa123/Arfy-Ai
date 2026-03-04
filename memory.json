@@ -6,10 +6,11 @@
     "location": "Eheliyagoda",
     "languages_spoken": "unknown, possibly Sinhala",
     "location_tomorrow": "Eheliyagoda",
-    "current_location": "Eheliyagoda"
+    "current_location": "Eheliyagoda",
+    "job": "unknown"
   },
   "preferences": {
-    "interests": "news",
+    "interests": "creating virtual companions",
     "hobbies": "gaming, listening to music, Minecraft",
     "music_platform": "Spotify",
     "note_taking_tool": "Slate"

@@ -44,7 +44,7 @@ class ArfyWindow(QMainWindow):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet(MAIN_STYLE)
-        self.setFixedSize(380, 540)
+        self.setFixedSize(380, 560)
         self._drag_pos = QPoint()
         self._build_ui()
 
@@ -59,7 +59,7 @@ class ArfyWindow(QMainWindow):
 
         # HUD overlay
         self.hud = HUDFrame(central)
-        self.hud.setGeometry(0, 0, 380, 540)
+        self.hud.setGeometry(0, 0, 380, 560)
         self.hud.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         # title bar
@@ -88,15 +88,26 @@ class ArfyWindow(QMainWindow):
         title_bar.addWidget(close_btn)
         layout.addLayout(title_bar)
 
-        # status
+        # status + mode label row
+        status_row = QHBoxLayout()
+
         self.status_label = QLabel("STANDBY MODE")
         self.status_label.setObjectName("statusLabel")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.status_label)
+
+        self.mode_label = QLabel("● VOICE MODE")
+        self.mode_label.setStyleSheet(
+            "color: #00BFFF; font-size: 9px; letter-spacing: 2px;"
+        )
+        self.mode_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        status_row.addWidget(self.status_label)
+        status_row.addWidget(self.mode_label)
+        layout.addLayout(status_row)
 
         # orb
         self.orb = JarvisOrb()
-        self.orb.setFixedHeight(260)
+        self.orb.setFixedHeight(250)
         layout.addWidget(self.orb)
 
         # bottom info
@@ -150,7 +161,6 @@ class ArfyWindow(QMainWindow):
         if text:
             self.text_submitted.emit(text)
             self.text_input.clear()
-            self.hide_input()
 
     @pyqtSlot()
     def show_input(self):
@@ -165,6 +175,19 @@ class ArfyWindow(QMainWindow):
         self.text_input.setEnabled(False)
         self.send_btn.setEnabled(False)
         self.text_input.clear()
+
+    @pyqtSlot(str)
+    def set_mode_label(self, mode):
+        if mode == "INPUT MODE":
+            self.mode_label.setText("● INPUT MODE")
+            self.mode_label.setStyleSheet(
+                "color: #00FF88; font-size: 9px; letter-spacing: 2px;"
+            )
+        else:
+            self.mode_label.setText("● VOICE MODE")
+            self.mode_label.setStyleSheet(
+                "color: #00BFFF; font-size: 9px; letter-spacing: 2px;"
+            )
 
     @pyqtSlot(str)
     def set_state(self, state):
