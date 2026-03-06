@@ -3,9 +3,8 @@ from apps import open_app, close_app
 from spotify import (play_song, play_playlist, pause_music,
                      resume_music, next_song, previous_song)
 
-# ─────────────────────────────────────────
+
 # KEYWORD MAPS
-# ─────────────────────────────────────────
 
 OPEN_KEYWORDS = ["open", "launch", "start", "run", "load"]
 CLOSE_KEYWORDS = ["close", "shut", "exit", "kill", "terminate", "quit"]
@@ -24,9 +23,9 @@ KNOWN_APPS = [
     "vscode", "vs code", "file explorer", "explorer"
 ]
 
-# ─────────────────────────────────────────
+
 # HELPERS
-# ─────────────────────────────────────────
+
 
 def clean(text):
     return text.lower().strip()
@@ -52,9 +51,7 @@ def find_app(text):
             return app
     return None
 
-# ─────────────────────────────────────────
 # ROUTER
-# ─────────────────────────────────────────
 
 def route_intent(text: str):
     """
@@ -64,7 +61,7 @@ def route_intent(text: str):
     """
     t = clean(text)
 
-    # ── CLOSE APP ──────────────────────────
+    # close app
     if contains(t, CLOSE_KEYWORDS):
         app = find_app(t)
         if app:
@@ -72,7 +69,7 @@ def route_intent(text: str):
                 return f"Closing {app}."
             return f"Couldn't close {app}."
 
-    # ── OPEN APP ───────────────────────────
+    # open app
     if contains(t, OPEN_KEYWORDS):
         app = find_app(t)
         if app:
@@ -80,35 +77,35 @@ def route_intent(text: str):
                 return f"Opening {app}."
             return f"Couldn't open {app}."
 
-    # ── PAUSE MUSIC ────────────────────────
+    # pause music
     if contains(t, PAUSE_KEYWORDS):
         return pause_music()
 
-    # ── RESUME MUSIC ───────────────────────
+    # resume music
     if contains(t, RESUME_KEYWORDS):
         return resume_music()
 
-    # ── NEXT SONG ──────────────────────────
+    # next song
     if contains(t, NEXT_KEYWORDS):
         return next_song()
 
-    # ── PREVIOUS SONG ──────────────────────
+    # previous song
     if contains(t, PREV_KEYWORDS):
         return previous_song()
 
-    # ── PLAY PLAYLIST ──────────────────────
+    # play playlist
     if contains(t, PLAY_PLAYLIST_KEYWORDS):
         name = extract_after(t, PLAY_PLAYLIST_KEYWORDS)
         if name:
             return play_playlist(name)
 
-    # ── PLAY SONG (explicit) ───────────────
+    # PLAY SONG (explicit)
     if contains(t, PLAY_SONG_KEYWORDS):
         name = extract_after(t, PLAY_SONG_KEYWORDS)
         if name:
             return play_song(name)
 
-    # ── PLAY (generic) ─────────────────────
+    # PLAY (generic) 
     if contains(t, PLAY_KEYWORDS):
         # check if it's a playlist
         if "playlist" in t:
@@ -120,5 +117,5 @@ def route_intent(text: str):
         if name:
             return play_song(name)
 
-    # ── NO MATCH → send to LLM ─────────────
+    
     return None

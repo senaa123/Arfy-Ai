@@ -88,7 +88,7 @@ def handle_command(text):
 
     ui_chat("You", text)
 
-    # goodbye
+    # sleep setup
     if any(word in text for word in ["goodbye", "sleep", "seeyou"]):
         input_mode = False
         ui_hide_input()
@@ -106,12 +106,12 @@ def handle_command(text):
         app.quit()
         return False
 
-    # ── INTENT ROUTER FIRST ─────────────────
+    # INTENT ROUTER FIRST
     ui_state("thinking")
     response = route_intent(text)
 
     if response:
-        # handled locally — fast, no LLM
+        # handled locally — no LLM
         print(f"[Router] Handled: {text} → {response}")
     else:
         # not handled — send to LLM

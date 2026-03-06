@@ -221,9 +221,8 @@ def save_memory(info: str) -> str:
     except Exception as e:
         return f"Memory save failed: {e}"
 
-# ─────────────────────────────────────────
-# TOOLS LIST
-# ─────────────────────────────────────────
+
+
 
 tools = [
     search_web,
@@ -237,9 +236,8 @@ tools = [
     save_memory
 ]
 
-# ─────────────────────────────────────────
+
 # HELPERS
-# ─────────────────────────────────────────
 
 def get_time_context():
     hour = datetime.now().hour
