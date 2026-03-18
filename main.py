@@ -134,7 +134,14 @@ def arfy_loop():
     ui_state("idle")
 
     while True:
-        if wait_for_wake_word():
+        result = wait_for_wake_word()
+        
+        if result == "shutdown":
+            ui_state("speaking")
+            speak("Shutting down! Bye Senaa!")
+            app.quit()
+            return
+        elif result == "wake":
             ui_state("speaking")
             speak("Yes Senaa!")
             ui_state("listening")

@@ -2,12 +2,14 @@
   "personal": {
     "name": "Senaa",
     "hometown": "Eheliyagoda, Sri Lanka",
-    "current_residence": "Malabe, Colombo",
+    "current_residence": "Malabe",
     "location": "Malabe",
     "languages_spoken": "unknown, possibly Sinhala",
     "location_tomorrow": "Eheliyagoda",
     "current_location": "Eheliyagoda",
-    "job": "unknown"
+    "job": "unknown",
+    "relationship_status": "single",
+    "abuse": "received abusive language"
   },
   "preferences": {
     "interests": "creating virtual companions",
