@@ -12,6 +12,9 @@ PyOpenGL-accelerate
 requests
 python-dotenv
 ddgs
+langchain-core==1.2.17
+langchain-community==0.4.1
+langchain-groq==1.1.2
 spotipy
 resemblyzer
 numpy
