@@ -21,3 +21,7 @@ Thumbs.db
 
 # json
 memory.json
+
+# Local semantic-memory storage
+Memory/qdrant/
+Memory/qdrant_sync_state.json

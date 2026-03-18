@@ -14,6 +14,7 @@ from langgraph.graph import StateGraph, MessagesState, END
 from langgraph.prebuilt import ToolNode
 
 from memory import get_memory_text, load_memory, memory_save
+from vector_memory import get_semantic_memory_context, sync_structured_memory
 from weather import (get_weather, get_forecast, get_tomorrow_forecast,
                      get_day_forecast)
 from apps import open_app
@@ -216,6 +217,8 @@ def save_memory(info: str) -> str:
             mem[category.strip()] = {}
         mem[category.strip()][key.strip()] = value.strip()
         memory_save(mem)
+        # Keep Qdrant synced with the exact JSON fact that was just saved.
+        sync_structured_memory()
         print(f"Memory saved: [{category}] {key} = {value}")
         return f"Remembered: {key.strip()} = {value.strip()}"
     except Exception as e:
@@ -250,13 +253,24 @@ def get_time_context():
     else:
         return "night"
 
-def get_system_prompt():
+def get_latest_user_text(messages):
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            return message.content
+    return ""
+
+def get_system_prompt(user_query: str = ""):
     memory_text = get_memory_text()
+    # Keep the prompt focused by retrieving only memories relevant to the current request.
+    semantic_memory_text = get_semantic_memory_context(user_query) if user_query else "No relevant semantic memories found."
     return f"""You are Arfy, Senaa's personal AI assistant.
 Current time of day: {get_time_context()}
 
-What you know about Senaa:
+Structured facts you know about Senaa:
 {memory_text}
+
+Relevant memories for this request:
+{semantic_memory_text}
 
 STRICT RULES — FOLLOW THESE EXACTLY:
 1. Only do EXACTLY what the user asks. Nothing more, nothing less.
@@ -313,7 +327,7 @@ llm_with_tools = llm.bind_tools(tools)
 
 def agent_node(state: MessagesState):
     """LLM decides what to do"""
-    system = SystemMessage(content=get_system_prompt())
+    system = SystemMessage(content=get_system_prompt(get_latest_user_text(state["messages"])))
     messages = [system] + state["messages"]
     response = llm_with_tools.invoke(messages)
 
@@ -371,6 +385,9 @@ graph = build_graph()
 
 def ask_brain(question: str) -> str:
     try:
+        # Sync before inference so the prompt can retrieve freshly saved facts.
+        sync_structured_memory()
+
         # only keep human and AI messages in history — not tool messages
         clean_history = [
             msg for msg in chat_history.messages
