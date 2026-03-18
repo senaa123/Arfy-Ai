@@ -293,7 +293,16 @@ RESPONSE RULES:
 MEMORY RULES:
 - If you learn something NEW and IMPORTANT about Senaa use save_memory tool.
 - Only save long term facts like job, location, hobbies, preferences.
-- Do NOT save temporary things like mood or current activity."""
+- Do NOT save temporary things like mood or current activity.
+- ONLY use save_memory when user EXPLICITLY says "remember", "save", "note" or "don't forget"
+- Example trigger: "remember I like rock music" → save it
+- Example trigger: "save that I work at Google" → save it
+- NEVER save anything unless user explicitly asks you to remember it
+- NEVER infer or assume things to save from conversation tone
+- NEVER save emotional observations like "abuse", "anger", "mood"
+- NEVER save things that weren't directly stated as facts by the user
+- If unsure whether to save — DO NOT save"""
+
 
 # ─────────────────────────────────────────
 # STATE GRAPH AGENT
