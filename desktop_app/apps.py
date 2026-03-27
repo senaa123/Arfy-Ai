@@ -2,6 +2,8 @@
 import string
 import subprocess
 
+DETACHED = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+
 APP = {
     "chrome": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     "notepad": "notepad.exe",
@@ -16,15 +18,31 @@ def open_app(app_name):
         return False
     
     app_name = app_name.lower().strip()
-
-    if app_name in APP:
-        path = APP[app_name]
-        subprocess.Popen(f'"{path}"', shell=True)
-        return True
     try:
-        subprocess.Popen(f'start "" "{app_name}"', shell=True)
-        return True
-    except:
+        if app_name in APP:
+            path = APP[app_name]
+            subprocess.Popen(
+                path,
+                shell=False,
+                creationflags=DETACHED,  # detaches sthe tools from the process
+                close_fds=True,# don't copy file descriptors
+                stdin=subprocess.DEVNULL,# no stdin handle inherited  
+                stdout=subprocess.DEVNULL, # no stdout handle inherited
+                stderr=subprocess.DEVNULL # no stderr handle inherited
+                )
+        else:
+            subprocess.Popen(
+                f'start "" "{app_name}"',#try from the shell start
+                    shell=True,
+                    creationflags=DETACHED,
+                    close_fds=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+            )
+            return True
+    except Exception as e:
+        print(f"Open app error: {e}")
         return False
 
 def close_app(app_name):
@@ -33,7 +51,13 @@ def close_app(app_name):
     target = app_name
     if app_name in APP:
         target = APP[app_name].split("\\")[-1].replace(".exe", "")
-    result = subprocess.run(f"taskkill /F /IM {target}.exe", shell=True)
+    result = subprocess.run(
+        f"taskkill /F /IM {target}.exe",
+        shell=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
     return result.returncode == 0
 
 def parse_command(text):

@@ -45,7 +45,19 @@ def ensure_spotify_open():
         wait_for_spotify_api(timeout=15)
         return
     print("Opening Spotify...")
-    subprocess.Popen(r'"C:\Users\ASUS\AppData\Roaming\Spotify\Spotify.exe"', shell=True)
+    
+    #Detaching the process
+    DETACHED = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+
+    subprocess.Popen(
+        r'"C:\Users\ASUS\AppData\Roaming\Spotify\Spotify.exe"',
+        shell=False,
+        creationflags=DETACHED,
+        close_fds=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+        )
     time.sleep(5)
     wait_for_spotify_api(timeout=30)
 

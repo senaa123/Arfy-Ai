@@ -9,11 +9,13 @@ from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
 from Ui.main_window import ArfyWindow
 from Ui.tray import ArfyTray
 
-from speech import  listen, listen_with_type_fallback
+from speech import listen, listen_with_type_fallback
 from wakeword import wait_for_wake_word
 from tts_engine import speak
-from brain import ask_brain
 from intent_router import route_intent
+from agent_client import ask_agent, is_agent_alive
+from action_executor import execute_action
+from memory_client import save_memory, is_memory_alive 
 
 typed_queue = queue.Queue()
 input_mode = False
@@ -75,7 +77,7 @@ def handle_command(text):
         return True
 
     # one time type
-    if any(phrase in text for phrase in ["let me type", "i'll type", "let me write", "input field"]):
+    if any(phrase in text for phrase in ["let me type", "i'll type", "let me write"]):
         ui_state("speaking")
         speak("Sure, go ahead and type!")
         ui_show_input()
@@ -90,7 +92,24 @@ def handle_command(text):
 
     ui_chat("You", text)
 
-    # sleep setup
+    if any(phrase in text for phrase in ["remember", "save that", "don't forget"]):
+        # extract what to remember
+        # example: "remember I like rock music"
+        ui_state("thinking")
+        result = ask_agent(text)  # agent figures out what to save
+        if result:
+            response = result.get("response", "Got it!")
+            action = result.get("action")
+            # if agent returns a memory save action
+            if action and action.get("type") == "save_memory":
+                payload = action.get("payload", {})
+                save_memory(
+                    payload.get("category", "facts"),
+                    payload.get("key", "note"),
+                    payload.get("value", "")
+                )
+
+    # goodbye
     if any(word in text for word in ["goodbye", "sleep", "seeyou"]):
         input_mode = False
         ui_hide_input()
@@ -108,17 +127,28 @@ def handle_command(text):
         app.quit()
         return False
 
-    # INTENT ROUTER FIRST
     ui_state("thinking")
+
+    # step 1 — local router first
     response = route_intent(text)
+    action = None
 
     if response:
-        # handled locally — no LLM
-        print(f"[Router] Handled: {text} → {response}")
+        print(f"[Router] Handled locally: {text}")
     else:
-        # not handled — send to LLM
-        print(f"[Router] No match — sending to LLM: {text}")
-        response = ask_brain(text)
+        # step 2 — send to agent service
+        print(f"[Router] Sending to Agent: {text}")
+        result = ask_agent(text)
+
+        if result:
+            response = result.get("response", "I had trouble with that.")
+            action = result.get("action")
+        else:
+            response = "Sorry, I couldn't reach the agent service."
+
+    # step 3 — execute action if returned
+    if action:
+        execute_action(action)
 
     ui_state("speaking")
     print(f"Arfy: {response}")
@@ -131,13 +161,21 @@ def handle_command(text):
 def arfy_loop():
     global input_mode
 
+    # check agent service on startup
+    if not is_agent_alive():
+        print("⚠️ Agent service not running at localhost:8001")
+        speak("Warning! Agent service is not running.")
+    if not is_memory_alive():  # memory check
+        print("⚠️ Memory service not running at localhost:8002")
+        speak("Warning! Memory service is not running.")
+
     ui_state("speaking")
     speak("Hello! I am Arfy, your personal assistant!")
     ui_state("idle")
 
     while True:
         result = wait_for_wake_word()
-        
+
         if result == "shutdown":
             ui_state("speaking")
             speak("Shutting down! Bye Senaa!")
@@ -156,12 +194,14 @@ def arfy_loop():
                     ui_state("listening")
 
                 text = get_input()
-
                 if not text:
                     continue
 
                 active_chat = handle_command(text)
 
+# ─────────────────────────────────────────
+# STARTUP
+# ─────────────────────────────────────────
 app = QApplication(sys.argv)
 app.setQuitOnLastWindowClosed(False)
 

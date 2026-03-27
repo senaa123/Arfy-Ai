@@ -17,22 +17,32 @@ from weather import (
 
 OPEN_KEYWORDS = ["open", "launch", "start", "run", "load"]
 CLOSE_KEYWORDS = ["close", "shut", "exit", "kill", "terminate", "quit"]
-
 PAUSE_KEYWORDS = ["pause", "stop music", "hold music", "mute music"]
 RESUME_KEYWORDS = ["resume", "continue", "unpause", "play again"]
 NEXT_KEYWORDS = ["next song", "next track", "skip", "skip song"]
 PREV_KEYWORDS = ["previous song", "previous track", "go back", "last song"]
-
 PLAY_SONG_KEYWORDS = ["play song", "play the song", "play track"]
 PLAY_PLAYLIST_KEYWORDS = ["play playlist", "play the playlist"]
 PLAY_KEYWORDS = ["play"]
-WEATHER_KEYWORDS = ["weather", "temperature", "forecast", "rain", "sunny", "humid"]
 
 KNOWN_APPS = [
     "chrome", "spotify", "notepad", "calculator",
     "vscode", "vs code", "file explorer", "explorer"
 ]
 
+CASUAL_RESPONSES = {
+    "how are you": "Doing great! What do you need?",
+    "what's up": "All good! Ready to help.",
+    "are you there": "Yes, I'm here!",
+    "hello": "Hey! What can I do for you?",
+    "hi": "Hey Senaa!",
+    "hey": "Yes?",
+    "okay": "Alright!",
+    "thanks": "No problem!",
+    "thank you": "Anytime Senaa!",
+    "good morning": "Good morning! How can I help?",
+    "good night": "Good night Senaa!",
+}
 
 # HELPERS
 
@@ -61,69 +71,6 @@ def find_app(text):
             return app
     return None
 
-
-def format_weather_response(question: str):
-    """Handle weather locally so common questions don't rely on LLM tool calling."""
-    if not contains(question, WEATHER_KEYWORDS):
-        return None
-
-    location = extract_location(question)
-    if not location:
-        return "I don't know your location yet. Tell me where you are."
-
-    if is_forecast_question(question):
-        target = extract_target_day(question)
-
-        if target == "tomorrow":
-            data = get_tomorrow_forecast(location)
-            if not data:
-                return "Couldn't fetch tomorrow's forecast."
-            return (
-                f"Tomorrow in {data['city']}: {data['min_temp']}°C to {data['max_temp']}°C, "
-                f"{data['description']}, humidity {data['humidity']}%."
-            )
-
-        if target == "week":
-            forecasts = get_forecast(location, days=5)
-            if not forecasts:
-                return "Couldn't fetch the weekly forecast."
-            lines = [
-                f"{day['day']}: {day['min_temp']}°C to {day['max_temp']}°C, {day['description']}"
-                for day in forecasts
-            ]
-            return f"5-day forecast for {forecasts[0]['city']}:\n" + "\n".join(lines)
-
-        if target == "weekend":
-            forecasts = get_forecast(location, days=5)
-            if not forecasts:
-                return "Couldn't fetch the weekend forecast."
-            weekend = [day for day in forecasts if day["day"] in ["Saturday", "Sunday"]]
-            if not weekend:
-                return "I couldn't find weekend data in the next few days."
-            lines = [
-                f"{day['day']}: {day['min_temp']}°C to {day['max_temp']}°C, {day['description']}"
-                for day in weekend
-            ]
-            return f"Weekend forecast for {forecasts[0]['city']}:\n" + "\n".join(lines)
-
-        if target and target != "tonight":
-            data = get_day_forecast(location, target)
-            if data:
-                return (
-                    f"{data['day']} in {data['city']}: {data['min_temp']}°C to {data['max_temp']}°C, "
-                    f"{data['description']}, humidity {data['humidity']}%."
-                )
-
-    data = get_weather(location)
-    if not data:
-        return f"Couldn't fetch weather for {location}."
-
-    return (
-        f"Weather in {data['city']}, {data['country']}: "
-        f"{data['temp']}°C, feels like {data['feels_like']}°C, "
-        f"{data['description']}, humidity {data['humidity']}%, wind {data['wind']} m/s."
-    )
-
 # ROUTER
 
 def route_intent(text: str):
@@ -133,6 +80,11 @@ def route_intent(text: str):
     Returns None if should go to LLM.
     """
     t = clean(text)
+    
+    # casual responses — never reach agent
+    for phrase, resonse in CASUAL_RESPONSES.items():
+        if phrase in t:
+            return resonse
 
     # close app
     if contains(t, CLOSE_KEYWORDS):
@@ -149,12 +101,7 @@ def route_intent(text: str):
             if open_app(app):
                 return f"Opening {app}."
             return f"Couldn't open {app}."
-
-    # weather
-    weather_response = format_weather_response(t)
-    if weather_response:
-        return weather_response
-
+        
     # pause music
     if contains(t, PAUSE_KEYWORDS):
         return pause_music()
@@ -195,5 +142,5 @@ def route_intent(text: str):
         if name:
             return play_song(name)
 
-    
+    # no match → send to agent
     return None
