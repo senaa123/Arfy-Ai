@@ -107,7 +107,7 @@ def get_action_history(limit: int = 10) -> list:
             timeout=TIMEOUT
         )
         if response.status_code==200:
-            return response.son().get("history", [])
+            return response.json().get("history", [])
         return []
     except Exception as e:
         print(f"History featch error: {e}")
