@@ -20,17 +20,17 @@ def web_search(query: str) -> dict:
             }
         
         #Build a readble message
-        lines =  []
+        summary_lines =  []
         for item in results:
             title = item.get("title", "No title")
             body = item.get("body", "")
             href = item.get("href", "")
-            lines.append(f"- {title}: {body} ({href})")
+            summary_lines.append(f"- {title}: {body} ({href})")
 
         return {
             "success": True,
             "results": results,
-            "message": "Top search results:\n" + "\n".join(lines)
+            "message": "Top search results:\n" + "\n".join(summary_lines)
         }
     
     except Exception as e:

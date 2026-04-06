@@ -1,15 +1,18 @@
 import os
+from dotenv import load_dotenv
+from pathlib import Path
 import requests
 
-
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(env_path)
 #Read API key 
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 #OpenWeatherMap API endpoint
-WEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
+WEATHER_BASE_URL = os.getenv("WEATHER_BASE_URL")
 
 
-def ge_weather(loaction: str) -> dict:
+def get_weather(location: str) -> dict:
     """
     Fetch current weather for a given location.
     """
@@ -25,7 +28,7 @@ def ge_weather(loaction: str) -> dict:
         response = requests.get(
             WEATHER_BASE_URL,
             params={
-                "q": loaction,
+                "q": location,
                 "appid": WEATHER_API_KEY,
                 "units": "metric"       
             },

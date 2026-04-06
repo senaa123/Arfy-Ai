@@ -1,12 +1,12 @@
-from typing import Dict
+from typing import Dict, List
+from datetime import datetime, timezone
 
 #Allowed agent actions
 SAFE_ACTIONS = {
     "open_app",
     "close_app",
     "spotify_play_playlist",
-    "spotify_play_song",
-    "speak_only",
+    "spotify_play_song"
 }
 
 #Allowed apps
@@ -24,7 +24,10 @@ def is_safe_action(action_type: str) -> bool:
     return action_type in SAFE_ACTIONS
 
 def validate_payload(action_type: str, payload: Dict) -> bool:
-    # Validate app  action payloead
+    """
+    Validate the action payload before the desktop app ever sees it.
+    """
+    
     if action_type in {"open_app", "close_app"}:
         app_name = str(payload.get("app_name", "")).strip().lower()
         return app_name in ALLOWED_APPS
@@ -44,3 +47,30 @@ def validate_payload(action_type: str, payload: Dict) -> bool:
         return True
     
     return False
+
+def seconds_ago(iso_timestamp: str) -> float:
+    """
+    Validate the action payload before the desktop app ever sees it.
+    """
+
+    try:
+        ts = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        return (now - ts).total_seconds()
+    except Exception:
+        return 999999
+    
+def is_repeated_action(action_type: str, history: List[dict], threshold_count: int = 3, window_seconds: int = 60) -> bool:
+    """
+    Checks if the same action happened too many times recently.
+    This helps block loops like open/close/open/close.
+    """
+    recent_same = []
+
+    for item in history:
+        if item.get("action_type") == action_type or item.get("type") == action_type:
+            if seconds_ago(item.get("timestamp", "")) < window_seconds:
+                recent_same.append(item)
+
+    return len(recent_same) >= threshold_count
+

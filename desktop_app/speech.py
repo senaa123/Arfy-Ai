@@ -1,46 +1,71 @@
-import os
 from pathlib import Path
 from typing import Optional
 
 import speech_recognition as sr
 from faster_whisper import WhisperModel
 
-from memory import apply_corrections, load_memory
-
 TEMP_LISTEN = Path("Audio/temp_listen.wav")
 
-# SpeechRecognition setup
 recognizer = sr.Recognizer()
 recognizer.energy_threshold = 300
 recognizer.dynamic_energy_threshold = True
 
-# Keep Whisper model exactly as requested
-whisper_model = WhisperModel("medium", device="cuda", compute_type="float16")
+_whisper_model = None
+
+
+def get_whisper_model():
+    """
+    Load Whisper lazily so desktop startup stays lighter.
+    """
+    global _whisper_model
+    if _whisper_model is None:
+        _whisper_model = WhisperModel("medium", device="cuda", compute_type="float16")
+    return _whisper_model
+
+
+def apply_corrections(text: str) -> str:
+    """
+    Local speech text correction hook.
+    Keep this lightweight.
+    """
+    corrections = {
+        "arfi": "arfy",
+        "sena": "senaa",
+        "vs code": "vscode",
+    }
+
+    fixed = text
+    for wrong, right in corrections.items():
+        fixed = fixed.replace(wrong, right)
+    return fixed
 
 
 def get_prompt() -> str:
     """
-    Build the initial prompt for Whisper using known memory values.
+    Prompt words for Whisper to better recognize your common names and apps.
     """
-    try:
-        memory = load_memory()
-        known_words = [str(value) for value in memory.values() if isinstance(value, str)]
-    except Exception:
-        known_words = []
-
-    base = "Senaa, Malabe, Eheliyagoda, Arfy, spotify, field"
-
-    if known_words:
-        return base + ", " + ", ".join(known_words)
-    return base
+    words = [
+        "Senaa",
+        "Arfy",
+        "Malabe",
+        "Eheliyagoda",
+        "spotify",
+        "chrome",
+        "vscode",
+        "notepad",
+        "calculator",
+    ]
+    return ", ".join(words)
 
 
 def _transcribe_file(audio_path: Path) -> Optional[str]:
     """
-    Transcribe an audio file using Faster Whisper.
+    Transcribe recorded WAV file using Faster Whisper.
     """
     try:
-        segments, _ = whisper_model.transcribe(
+        model = get_whisper_model()
+
+        segments, _ = model.transcribe(
             str(audio_path),
             language="en",
             initial_prompt=get_prompt()
@@ -60,7 +85,7 @@ def _transcribe_file(audio_path: Path) -> Optional[str]:
 
 def listen(time_limit: int = 5, phrase_time_limit: int = 10) -> Optional[str]:
     """
-    Capture microphone audio and transcribe it.
+    Capture microphone audio and transcribe it locally.
     """
     with sr.Microphone() as source:
         try:
@@ -83,21 +108,27 @@ def listen(time_limit: int = 5, phrase_time_limit: int = 10) -> Optional[str]:
 
             if text:
                 print(f"You said: {text}")
+
             return text
 
         except sr.WaitTimeoutError:
             return None
-        except sr.UnknownValueError:
-            print("Could not understand audio")
-            return None
+
         except Exception as e:
             print(f"Listen error: {e}")
             return None
 
+        finally:
+            if TEMP_LISTEN.exists():
+                try:
+                    TEMP_LISTEN.unlink()
+                except Exception:
+                    pass
+
 
 def listen_with_type_fallback(time_limit: int = 5) -> Optional[str]:
     """
-    Placeholder for future typed fallback.
-    Currently just uses voice listen.
+    Future typed fallback hook.
+    For now, just use voice.
     """
     return listen(time_limit=time_limit)

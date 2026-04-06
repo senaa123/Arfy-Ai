@@ -1,16 +1,46 @@
+import os
 import requests
-from typing import Optional
-from memory_client import retrieve_memory
+from pathlib import Path
+from dotenv import load_dotenv
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(env_path)
 
-AGENT_URL = "http://localhost:8001" #Agent addres
-TIMEOUT = 30 # Time wait for the agent response
+# Agent service base URL
+AGENT_URL = os.getenv("AGENT_URL")
 
-def ask_agent(text: str, session_id: str ="senaa_01")-> Optional[dict]:
+# Request timeout in seconds
+TIMEOUT = 30
+
+def agent_health_check() -> bool:
+    """
+    Check whether the agent service is running.
+    """
     try:
-        # get relevant memories
-        memories = retrieve_memory(text, limit=3)
+        response = requests.get(f"{AGENT_URL}/health", timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("status") == "ok"
+    except Exception:
+        return False
 
-        #request
+
+def ask_agent(text: str, session_id: str, memories: list | None = None) -> dict:
+    """
+    Send user text and relevant memories to the agent service.
+
+    Expected response:
+    {
+        "response": "...",
+        "action": {...} or None,
+        "confidence": 0.95,
+        "tool_used": "weather",
+        "session_id": "senaa_01"
+    }
+    """
+    if memories is None:
+        memories = []
+
+    try:
         response = requests.post(
             f"{AGENT_URL}/agent/ask",
             json={
@@ -20,45 +50,52 @@ def ask_agent(text: str, session_id: str ="senaa_01")-> Optional[dict]:
             },
             timeout=TIMEOUT
         )
-        if response.status_code == 200:
-            return response.json() #convert response
-        else:
-            print(f"Agent error: {response.status_code}")
-            return None
-    except requests.exceptions.ConnectionError:
-        print("Agent service not reachable — is it running?")
-        return None
-    except requests.exceptions.Timeout:
-        print("Agent service timed out")
-        return None
+        response.raise_for_status()
+        return response.json()
+
+    except requests.Timeout:
+        return {
+            "response": "The agent service took too long to respond.",
+            "action": None,
+            "confidence": 0.0,
+            "tool_used": None,
+            "session_id": session_id
+        }
+
+    except requests.RequestException as e:
+        return {
+            "response": f"Could not reach the agent service: {e}",
+            "action": None,
+            "confidence": 0.0,
+            "tool_used": None,
+            "session_id": session_id
+        }
+
     except Exception as e:
-        print(f"Agent client error: {e}")
-        return None
-    
-def reset_session(session_id: str = "senaa_01") -> bool:
-    #clear conversation history
+        return {
+            "response": f"Unexpected agent error: {e}",
+            "action": None,
+            "confidence": 0.0,
+            "tool_used": None,
+            "session_id": session_id
+        }
+
+
+def reset_agent_session(session_id: str) -> dict:
+    """
+    Clear short-term session history inside agent service.
+    """
     try:
         response = requests.post(
-            f"{AGENT_URL}/agent/rest",
-            json={"session_id":session_id},
-            timeout=5
+            f"{AGENT_URL}/agent/reset",
+            params={"session_id": session_id},
+            timeout=10
         )
-        return response.status_code == 200
-    except:
-        return False
-    
-def is_agent_alive()->bool:
-    """
-    Check if Agent Service is running.
-    Called on startup so Arfy can warn if agent is offline.
-    
-    Returns True if alive, False if not reachable.
-    """
-    try:
-        response = requests.get(
-            f"{AGENT_URL}/health",
-            timeout=3 #short time out
-        )
-        return response.status_code == 200
-    except:
-        return False
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "session_id": session_id
+        }

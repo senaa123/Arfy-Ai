@@ -2,12 +2,16 @@ import os
 import struct
 import wave
 from pathlib import Path
+from dotenv import load_dotenv
 from typing import Optional
 
 import pvporcupine
 from pvrecorder import PvRecorder
-
 from voice_auth import is_owner_voice
+
+
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(env_path)
 
 ACCESS_KEY = os.getenv("PICOVOICE_KEY")
 
