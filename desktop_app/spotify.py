@@ -1,11 +1,14 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 import subprocess
 import time
 import psutil
-load_dotenv()
+
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(env_path)
 
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
     client_id=os.getenv("SPOTIFY_CLIENT_ID"),

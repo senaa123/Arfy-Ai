@@ -19,7 +19,7 @@ def classify_request(text: str, memories: Optional[List[MemoryItem]] = None) -> 
     user_text = text.strip().lower()
 
     #Remembering something
-    if user_text.startswitch("remember") or  "remember that" in user_text:
+    if user_text.startswith("remember") or  "remember that" in user_text:
         value = user_text.replace("remember that", "").replace("remember", "").strip()
 
         return RouteDecision(
