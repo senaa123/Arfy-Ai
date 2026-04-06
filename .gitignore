@@ -21,3 +21,35 @@ Thumbs.db
 
 # json
 memory.json
+
+# Local semantic-memory storage
+Memory/qdrant/
+Memory/qdrant_sync_state.json
+
+
+# Logs
+*.log
+
+# Specific local text/debug files
+crash_log.txt
+
+# Database / memory files
+*.db
+*.sqlite
+*.sqlite3
+
+# Qdrant local data
+qdrant_data/
+
+# Audio runtime/generated/private files
+Audio/owner_voice.npy
+Audio/speech_output.mp3
+Audio/temp_wake.wav
+Audio/samples/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# General cache folders
+.cache/
