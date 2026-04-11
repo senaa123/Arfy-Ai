@@ -52,4 +52,4 @@ __pycache__/
 *.py[cod]
 
 # General cache folders
-.cache/
+.cache
