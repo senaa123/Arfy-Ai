@@ -72,8 +72,9 @@ def wait_for_wake_word() -> Optional[str]:
     try:
         porcupine = pvporcupine.create(
             access_key=ACCESS_KEY,
-            keyword_paths=[HEY_ARFY_PATH, SHUTDOWN_ARFY_PATH],
-            sensitivities=[0.7, 0.7]
+            keywords=["jarvis"],
+            keyword_paths=[SHUTDOWN_ARFY_PATH],   #HEY_ARFY_PATH,
+            sensitivities=[0.7]
         )
 
         recorder = PvRecorder(

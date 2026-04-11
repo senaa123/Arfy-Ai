@@ -13,7 +13,7 @@ from PyQt6.QtCore import QMetaObject, Qt, Q_ARG
 from Ui.main_window import ArfyWindow
 from Ui.tray import ArfyTray
 
-from speech import listen_with_type_fallback
+from speech import listen
 from wakeword import wait_for_wake_word
 from tts_engine import speak
 from intent_router import route_local_intent
@@ -25,7 +25,6 @@ from memory_client import (
     memory_health_check,
 )
 
-# Session id for short-term history in agent service
 SESSION_ID = "senaa_01"
 
 typed_queue = queue.Queue()
@@ -95,16 +94,13 @@ def get_input():
         except queue.Empty:
             return None
     else:
-        return listen_with_type_fallback()
+        return listen(time_limit=6)
 
 
 # -------------------------
 # Local desktop-only commands
 # -------------------------
 def handle_local_command(command: str):
-    """
-    Handle tiny fast desktop-only commands without asking agent service.
-    """
     global input_mode
 
     if command == "switch_input_mode":
@@ -148,15 +144,6 @@ def handle_local_command(command: str):
 # Main command handling
 # -------------------------
 def handle_command(text):
-    """
-    Main desktop-side command flow:
-    1. handle local commands first
-    2. retrieve relevant memories
-    3. ask agent service
-    4. execute returned action if any
-    5. log executed action
-    6. speak response
-    """
     global input_mode
 
     if not text:
@@ -164,18 +151,12 @@ def handle_command(text):
 
     normalized_text = text.strip().lower()
 
-    # -------------------------
-    # Local mode switches
-    # -------------------------
     if any(phrase in normalized_text for phrase in ["switch to input mode", "input mode"]):
         return handle_local_command("switch_input_mode")
 
     if any(phrase in normalized_text for phrase in ["switch to voice mode", "voice mode"]):
         return handle_local_command("switch_voice_mode")
 
-    # -------------------------
-    # One-time typed input
-    # -------------------------
     if any(phrase in normalized_text for phrase in ["let me type", "i'll type", "let me write"]):
         ui_state("speaking")
         speak("Sure, go ahead and type!")
@@ -193,32 +174,20 @@ def handle_command(text):
 
     ui_chat("You", text)
 
-    # -------------------------
-    # Local goodbye / shutdown
-    # -------------------------
     if any(word in normalized_text for word in ["goodbye", "sleep", "seeyou"]):
         return handle_local_command("goodbye")
 
     if any(word in normalized_text for word in ["stop", "exit", "quit"]):
         return handle_local_command("shutdown")
 
-    # -------------------------
-    # Tiny local router only
-    # -------------------------
     local_result = route_local_intent(normalized_text)
     if local_result is not None:
         command = local_result.get("command")
         return handle_local_command(command)
 
-    # -------------------------
-    # Ask memory service first
-    # -------------------------
     ui_state("thinking")
     memories = retrieve_memory(normalized_text, limit=5)
 
-    # -------------------------
-    # Ask agent service
-    # -------------------------
     result = ask_agent(
         text=normalized_text,
         session_id=SESSION_ID,
@@ -228,9 +197,6 @@ def handle_command(text):
     response = result.get("response", "Sorry, I couldn't reach the agent service.")
     action = result.get("action")
 
-    # -------------------------
-    # Execute action if returned
-    # -------------------------
     if action:
         success, action_message = execute_action(action)
 
@@ -242,13 +208,9 @@ def handle_command(text):
 
         print(action_message)
 
-        # Do not let Arfy claim success when the action failed
         if not success:
             response = action_message
 
-    # -------------------------
-    # Speak + show response
-    # -------------------------
     ui_state("speaking")
     print(f"Arfy: {response}")
     ui_chat("Arfy", response)
@@ -264,7 +226,6 @@ def handle_command(text):
 def arfy_loop():
     global input_mode
 
-    # Startup checks
     if not agent_health_check():
         print("⚠️ Agent service not running")
         speak("Warning! Agent service is not running.")
@@ -293,10 +254,7 @@ def arfy_loop():
             active_chat = True
 
             while active_chat:
-                if input_mode:
-                    ui_state("idle")
-                else:
-                    ui_state("listening")
+                ui_state("idle" if input_mode else "listening")
 
                 text = get_input()
                 if not text:
@@ -305,9 +263,6 @@ def arfy_loop():
                 active_chat = handle_command(text)
 
 
-# -------------------------
-# Startup
-# -------------------------
 app = QApplication(sys.argv)
 app.setQuitOnLastWindowClosed(False)
 

@@ -24,3 +24,4 @@ pyttsx3
 groq
 nvidia-cudnn-cu12
 qdrant-client[fastembed]>=1.14.2
+#pip install silero-vad sounddevice numpy scipy
