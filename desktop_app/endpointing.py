@@ -8,7 +8,7 @@ class EndpointingConfig:
     """
     frame_ms: int = 32
     start_trigger_frames: int = 3
-    end_silence_ms: int = 600
+    end_silence_ms: int = 1200
     preroll_ms: int = 300
     min_utterance_ms: int = 300
     max_utterance_ms: int = 12000
