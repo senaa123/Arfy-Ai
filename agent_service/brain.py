@@ -5,7 +5,12 @@ from langchain_groq import ChatGroq
 
 from agent_service.config import GROQ_API_KEY, GROQ_MODEL_MAIN, GROQ_MODEL_ROUTER
 from agent_service.models import MemoryItem, RouteDecision, SessionMessage
-from agent_service.prompts import FINAL_RESPONSE_PROMPT, ROUTER_PROMPT, SYSTEM_PROMPT
+from agent_service.prompts import (
+    FINAL_RESPONSE_PROMPT,
+    ROUTER_PROMPT,
+    SYSTEM_PROMPT,
+    WEATHER_RESPONSE_PROMPT,
+)
 
 # Fast router model
 router_llm = ChatGroq(
@@ -293,9 +298,7 @@ def build_final_response(
     Generate the final assistant response.
     """
     if tool_used == "weather" and isinstance(tool_result, dict):
-        weather_message = str(tool_result.get("message", "")).strip()
-        if weather_message:
-            return weather_message
+        return build_weather_response(user_text, tool_result)
 
     memory_text = format_memories(memories)
     history_text = format_history(history)
@@ -315,6 +318,122 @@ def build_final_response(
         HumanMessage(content=prompt),
     ])
     return response.content.strip()
+
+
+def build_weather_response(user_text: str, tool_result: dict) -> str:
+    """
+    Let the LLM turn structured weather data into a natural weather report.
+    Falls back to the tool-generated message if the model is unavailable.
+    """
+    fallback = str(tool_result.get("message", "")).strip()
+    if not tool_result.get("success", False):
+        return fallback or "I couldn't build the weather report right now."
+
+    prompt = WEATHER_RESPONSE_PROMPT.format(
+        user_text=user_text,
+        tool_result=format_weather_tool_result(tool_result),
+    )
+
+    try:
+        response = main_llm.invoke([
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ])
+        content = response.content.strip()
+        if content:
+            return content
+    except Exception:  # noqa: BLE001
+        pass
+
+    return fallback or "I couldn't build the weather report right now."
+
+
+def format_weather_tool_result(tool_result: dict) -> str:
+    """
+    Build a compact, explicit weather brief for the LLM so it can sound
+    natural without hallucinating from a huge raw payload.
+    """
+    lines = []
+
+    for key in [
+        "kind",
+        "location",
+        "target_date",
+        "start_date",
+        "end_date",
+        "description",
+        "temperature_c",
+        "average_temp_c",
+        "high_temp_c",
+        "low_temp_c",
+        "feels_like_c",
+        "humidity_percent",
+        "wind_speed_kmh",
+        "wind_gusts_kmh",
+        "rain_mm",
+        "precipitation_mm",
+        "rain_chance_percent",
+        "rain_coverage_percent",
+        "sunrise",
+        "sunset",
+    ]:
+        value = tool_result.get(key)
+        if value is not None:
+            lines.append(f"{key}: {value}")
+
+    hourly_rows = tool_result.get("hourly_breakdown") or []
+    if hourly_rows:
+        lines.append("hourly_breakdown:")
+        for row in hourly_rows[:6]:
+            row_parts = []
+            for key in [
+                "clock",
+                "description",
+                "temperature_c",
+                "feels_like_c",
+                "humidity_percent",
+                "wind_speed_kmh",
+                "rain_mm",
+                "precipitation_mm",
+                "rain_chance_percent",
+            ]:
+                value = row.get(key)
+                if value is not None:
+                    row_parts.append(f"{key}={value}")
+            if row_parts:
+                lines.append("- " + ", ".join(row_parts))
+
+    per_day = tool_result.get("per_day") or []
+    if per_day:
+        lines.append("per_day:")
+        for item in per_day[:7]:
+            day_parts = [f"date={item.get('date')}"]
+            weather_items = item.get("weather") or []
+            if weather_items and isinstance(weather_items[0], dict):
+                description = weather_items[0].get("description")
+                if description:
+                    day_parts.append(f"description={description}")
+
+            for section, keys in [
+                ("temp", ["day", "max", "min"]),
+                ("feels_like", ["day", "max", "min"]),
+                ("humidity", ["mean"]),
+                ("wind", ["mean_kmh", "gusts_max_kmh"]),
+                ("precipitation", ["rain_mm", "chance_max_percent", "coverage_percent"]),
+                ("astronomy", ["sunrise", "sunset"]),
+            ]:
+                data = item.get(section) or {}
+                for key in keys:
+                    value = data.get(key)
+                    if value is not None:
+                        day_parts.append(f"{section}.{key}={value}")
+
+            lines.append("- " + ", ".join(day_parts))
+
+    if fallback := str(tool_result.get("message", "")).strip():
+        lines.append(f"tool_message: {fallback}")
+
+    return "\n".join(lines)
 
 
 def extract_location_from_text_or_memory(text: str, memories: List[MemoryItem]) -> str:
