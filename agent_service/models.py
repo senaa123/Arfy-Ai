@@ -1,39 +1,85 @@
 from typing import Any, Dict, List, Optional, Literal
-from pydantic  import BaseModel, Field
+from pydantic import BaseModel, Field
 
-#A single memory item passed from desktop or returned by memory service
+
 class MemoryItem(BaseModel):
+    """
+    A memory item returned by memory_service and passed into the agent.
+    """
     category: str
     key: str
     value: Any
     score: Optional[float] = None
+    session_id: Optional[str] = None
+    created_at: Optional[str] = None
+    memory_kind: Optional[str] = None
+    chunk_reason: Optional[str] = None
 
-#Data desktop sends to agent
+
+class SessionMessage(BaseModel):
+    """
+    A single short-term chat message stored for the active session.
+    """
+    role: Literal["user", "assistant"]
+    content: str
+    timestamp: str
+
+
+class PendingAction(BaseModel):
+    """
+    A follow-up action waiting for user confirmation.
+
+    Example:
+    Arfy asks: "Do you want me to check the weather in Balangoda?"
+    We store:
+        intent = "weather"
+        payload = {"location": "Balangoda"}
+    """
+    intent: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class AgentRequest(BaseModel):
+    """
+    Input payload sent from desktop app to agent service.
+    """
     text: str
     session_id: str = "default_session"
     memories: List[MemoryItem] = Field(default_factory=list)
 
-#action agent want to execute in app
+
 class AgentAction(BaseModel):
+    """
+    Action the desktop app may execute.
+    """
     type: str
     payload: dict[str, Any] = Field(default_factory=dict)
 
-#final response sent back to the desktop app
+
 class AgentResponse(BaseModel):
+    """
+    Final structured response returned to desktop app.
+    """
     response: str
     action: Optional[AgentAction] = None
     confidence: float = 0.0
     tool_used: Optional[str] = None
     session_id: str
 
-# Internal graph state used inside LangGraph flow
+
 class GraphState(BaseModel):
+    """
+    Internal state passed through LangGraph.
+    """
     session_id: str
     user_text: str
     memories: List[MemoryItem] = Field(default_factory=list)
+    history: List[SessionMessage] = Field(default_factory=list)
 
-    # Values filled during graph execution
+    # NEW:
+    # Stores a pending follow-up action for confirmation handling.
+    pending_action: Optional[PendingAction] = None
+
     intent: Optional[str] = None
     extracted_data: Dict[str, Any] = Field(default_factory=dict)
     tool_used: Optional[str] = None
@@ -42,8 +88,11 @@ class GraphState(BaseModel):
     response: Optional[str] = None
     confidence: float = 0.0
 
-#Structured router output from LLM
+
 class RouteDecision(BaseModel):
+    """
+    Router output produced by the LLM router or fallback parser.
+    """
     intent: Literal[
         "chat",
         "open_app",
@@ -53,7 +102,7 @@ class RouteDecision(BaseModel):
         "remember",
         "spotify_play_song",
         "spotify_play_playlist",
-        "unknown"
+        "unknown",
     ]
     confidence: float = 0.0
     extracted_data: Dict[str, Any] = Field(default_factory=dict)
