@@ -1,6 +1,11 @@
+# memory_service/qdrant_store.py
+
+from __future__ import annotations
+
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -8,86 +13,116 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 from sentence_transformers import SentenceTransformer
 
-# Load env
+# Load env from memory_service/.env
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(env_path)
 
-COLLECTION_NAME = os.getenv("QDRANT_COLLECTION")
-QDRANT_PATH = os.getenv("QDRANT_PATH")
+STRUCTURED_COLLECTION = (
+    os.getenv("QDRANT_STRUCTURED_COLLECTION")
+    or os.getenv("QDRANT_COLLECTION")
+    or "structured_memory"
+)
+SESSION_COLLECTION = os.getenv("QDRANT_SESSION_COLLECTION", "session_memory")
+DOCUMENT_COLLECTION = os.getenv("QDRANT_DOCUMENT_COLLECTION", "document_memory")
 
-# Local Qdrant client
-client = QdrantClient(path=QDRANT_PATH)
+QDRANT_PATH = os.getenv("QDRANT_PATH", "./qdrant_data")
 
-# Embedding model
-model = SentenceTransformer("all-MiniLM-L6-v2")
+_client: QdrantClient | None = None
+_model: SentenceTransformer | None = None
+_client_lock = Lock()
+_model_lock = Lock()
+
+
+def get_qdrant_client() -> QdrantClient:
+    """
+    Lazily initialize the local Qdrant client.
+    """
+    global _client
+
+    if _client is not None:
+        return _client
+
+    with _client_lock:
+        if _client is None:
+            _client = QdrantClient(path=QDRANT_PATH)
+
+    return _client
+
+
+def get_embedding_model() -> SentenceTransformer:
+    """
+    Lazily load the embedding model from local cache only.
+    """
+    global _model
+
+    if _model is not None:
+        return _model
+
+    with _model_lock:
+        if _model is None:
+            _model = SentenceTransformer(
+                "all-MiniLM-L6-v2",
+                local_files_only=True,
+            )
+
+    return _model
 
 
 def embed_text(text: str):
     """
-    Convert text into an embedding vector.
+    Convert plain text into an embedding vector.
     """
+    model = get_embedding_model()
     return model.encode(text).tolist()
 
 
-def ensure_collection():
+def generate_qdrant_id() -> str:
     """
-    Create the Qdrant collection if it does not already exist.
+    Generate a UUID string valid for Qdrant local mode.
     """
-    collections = client.get_collections().collections
-    existing_names = [c.name for c in collections]
-
-    if COLLECTION_NAME not in existing_names:
-        client.create_collection(
-            collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(
-                size=384,
-                distance=Distance.COSINE,
-            ),
-        )
+    return str(uuid4())
 
 
 def _now_iso() -> str:
     """
-    Return current UTC time as ISO string.
+    Current UTC timestamp as ISO string.
     """
     return datetime.now(timezone.utc).isoformat()
 
 
+def now_iso() -> str:
+    """
+    Public helper for payload timestamps stored in vector metadata.
+    """
+    return _now_iso()
+
+
 def _parse_iso(ts: str | None):
     """
-    Safely parse an ISO timestamp string.
-
-    Always return a timezone-aware datetime in UTC.
-    This prevents naive/aware subtraction errors.
+    Parse an ISO string into a timezone-aware datetime.
     """
     if not ts:
         return None
 
     try:
-        # Normalize trailing Z
         cleaned = ts.replace("Z", "+00:00")
         dt = datetime.fromisoformat(cleaned)
-
-        # If parsed datetime has no timezone, assume UTC
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-
         return dt.astimezone(timezone.utc)
-
     except Exception:
         return None
 
 
 def _recency_bonus(created_at: str | None) -> float:
     """
-    Add a small recency boost so fresher relevant memories rank slightly higher.
+    Small recency bonus to make fresher memories slightly easier to recall.
     """
     dt = _parse_iso(created_at)
     if dt is None:
         return 0.0
 
-    now = datetime.now(timezone.utc)
-    age_days = (now - dt).total_seconds() / 86400
+    age_days = (datetime.now(timezone.utc) - dt).total_seconds() / 86400
 
     if age_days <= 1:
         return 0.15
@@ -98,52 +133,50 @@ def _recency_bonus(created_at: str | None) -> float:
     return 0.0
 
 
-def generate_qdrant_id() -> str:
+def ensure_collection(collection_name: str) -> None:
     """
-    Generate a valid UUID string for Qdrant point ids.
-
-    We use UUID strings for ALL Qdrant points to avoid id-format issues
-    in local Qdrant mode.
+    Create one collection if it does not already exist.
     """
-    return str(uuid4())
+    client = get_qdrant_client()
+    collections = client.get_collections().collections
+    existing_names = [c.name for c in collections]
+
+    if collection_name not in existing_names:
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(
+                size=384,
+                distance=Distance.COSINE,
+            ),
+        )
 
 
-def upsert_memory_point(
+def ensure_all_collections() -> None:
+    """
+    Ensure all currently-used memory collections exist.
+    """
+    ensure_collection(STRUCTURED_COLLECTION)
+    ensure_collection(SESSION_COLLECTION)
+    ensure_collection(DOCUMENT_COLLECTION)
+
+
+def upsert_vector_point(
+    *,
+    collection_name: str,
     point_id: str,
-    category: str,
-    key: str,
-    value: str,
-    metadata: dict | None = None,
-):
+    text_for_embedding: str,
+    payload: dict,
+) -> str:
     """
-    Store one memory point in Qdrant.
-
-    point_id must be a valid UUID string.
+    Store one vector point in the requested collection.
     """
-    ensure_collection()
+    ensure_collection(collection_name)
 
-    metadata = metadata or {}
-
-    text_for_embedding = f"{category} {key} {value}"
     vector = embed_text(text_for_embedding)
-
-    payload = {
-        "category": category,
-        "key": key,
-        "value": value,
-        "created_at": metadata.get("created_at", _now_iso()),
-        "session_id": metadata.get("session_id"),
-        "memory_kind": metadata.get("memory_kind", "durable_memory"),
-        "chunk_reason": metadata.get("chunk_reason"),
-        "summary": metadata.get("summary"),
-        "transcript": metadata.get("transcript"),
-        "session_started_at": metadata.get("session_started_at"),
-        "session_ended_at": metadata.get("session_ended_at"),
-        "sqlite_id": metadata.get("sqlite_id"),
-    }
+    client = get_qdrant_client()
 
     client.upsert(
-        collection_name=COLLECTION_NAME,
+        collection_name=collection_name,
         points=[
             PointStruct(
                 id=point_id,
@@ -153,82 +186,23 @@ def upsert_memory_point(
         ],
     )
 
-
-def upsert_session_archive(
-    session_id: str,
-    transcript: str,
-    summary: str,
-    session_started_at: str | None = None,
-    session_ended_at: str | None = None,
-    chunk_reason: str = "overflow",
-):
-    """
-    Save archived session chat into Qdrant.
-    """
-    point_id = generate_qdrant_id()
-
-    upsert_memory_point(
-        point_id=point_id,
-        category="session_history",
-        key=session_id,
-        value=summary,
-        metadata={
-            "created_at": _now_iso(),
-            "session_id": session_id,
-            "memory_kind": "session_archive",
-            "chunk_reason": chunk_reason,
-            "summary": summary,
-            "transcript": transcript,
-            "session_started_at": session_started_at,
-            "session_ended_at": session_ended_at,
-        },
-    )
-
     return point_id
 
 
-def upsert_session_summary(
-    session_id: str,
-    summary: str,
-    session_started_at: str | None = None,
-    session_ended_at: str | None = None,
-    sqlite_id: int | None = None,
-):
+def query_collection(query: str, collection_name: str, limit: int = 5) -> list[dict]:
     """
-    Save a final session summary into Qdrant.
+    Query one collection semantically and return normalized results.
+
+    Phase 3C change:
+    - return document chunk metadata too when searching document_memory
     """
-    point_id = generate_qdrant_id()
+    ensure_collection(collection_name)
 
-    upsert_memory_point(
-        point_id=point_id,
-        category="session_summary",
-        key=session_id,
-        value=summary,
-        metadata={
-            "created_at": _now_iso(),
-            "session_id": session_id,
-            "memory_kind": "session_summary",
-            "chunk_reason": "session_end",
-            "summary": summary,
-            "session_started_at": session_started_at,
-            "session_ended_at": session_ended_at,
-            "sqlite_id": sqlite_id,
-        },
-    )
-
-    return point_id
-
-
-def semantic_search(query: str, limit: int = 5):
-    """
-    Search memories semantically using vector similarity, then rerank slightly
-    using recency.
-    """
-    ensure_collection()
     vector = embed_text(query)
+    client = get_qdrant_client()
 
     raw_results = client.query_points(
-        collection_name=COLLECTION_NAME,
+        collection_name=collection_name,
         query=vector,
         limit=max(limit * 3, limit),
         with_payload=True,
@@ -242,39 +216,32 @@ def semantic_search(query: str, limit: int = 5):
 
         reranked.append(
             {
-                "id": point.id,
+                "id": str(point.id),
                 "score": adjusted_score,
-                "raw_score": point.score,
+                "raw_score": float(point.score),
+                "collection_name": collection_name,
                 "category": payload.get("category"),
                 "key": payload.get("key"),
                 "value": payload.get("value"),
+                "public_id": payload.get("public_id"),
                 "session_id": payload.get("session_id"),
+                "document_id": payload.get("document_id"),
                 "created_at": created_at,
                 "memory_kind": payload.get("memory_kind"),
                 "chunk_reason": payload.get("chunk_reason"),
                 "summary": payload.get("summary"),
                 "transcript": payload.get("transcript"),
-                "sqlite_id": payload.get("sqlite_id"),
+                "linked_record_id": payload.get("linked_record_id"),
+                "source": payload.get("source"),
+                "file_name": payload.get("file_name"),
+                "source_ref": payload.get("source_ref"),
+                "content_hash": payload.get("content_hash"),
+                "extension": payload.get("extension"),
+                "chunk_index": payload.get("chunk_index"),
+                "start_char": payload.get("start_char"),
+                "end_char": payload.get("end_char"),
             }
         )
 
-    reranked.sort(key=lambda x: x["score"], reverse=True)
-
-    memories = []
-    for item in reranked[:limit]:
-        memories.append(
-            {
-                "id": item["id"],
-                "score": item["score"],
-                "category": item["category"],
-                "key": item["key"],
-                "value": item["summary"] or item["value"],
-                "session_id": item["session_id"],
-                "created_at": item["created_at"],
-                "memory_kind": item["memory_kind"],
-                "chunk_reason": item["chunk_reason"],
-                "sqlite_id": item["sqlite_id"],
-            }
-        )
-
-    return memories
+    reranked.sort(key=lambda item: item["score"], reverse=True)
+    return reranked[:limit]
