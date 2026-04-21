@@ -1,3 +1,3 @@
 @echo off
-"E:\Data Science\Arfy-Ai\venv\Scripts\python.exe" "E:\Data Science\Arfy-Ai\main.py"
+"%~dp0venv\Scripts\python.exe" -m desktop_app.main
 pause

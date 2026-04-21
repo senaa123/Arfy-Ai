@@ -1,26 +1,48 @@
-torch --index-url https://download.pytorch.org/whl/cu121
-torchvision --index-url https://download.pytorch.org/whl/cu121
-torchaudio --index-url https://download.pytorch.org/whl/cu121
-faster-whisper
-speechrecognition
-pyaudio
-edge-tts
-pygame
-PyQt6
-PyOpenGL
-PyOpenGL-accelerate
+# Core services
+fastapi
+pydantic
 requests
 python-dotenv
+starlette
+sqlalchemy
+tzdata
+uvicorn
+
+# Agent stack
 ddgs
 langchain-core==1.2.17
-langchain-community==0.4.1
 langchain-groq==1.1.2
-spotipy
-resemblyzer
-numpy
-pystray
+langgraph
+
+# Memory, document, and OCR services
 Pillow
-pyttsx3
-groq
-nvidia-cudnn-cu12
-qdrant-client[fastembed]>=1.14.2
+pypdf
+PyMuPDF
+python-docx
+pytesseract
+qdrant-client>=1.14.2
+sentence-transformers
+
+# Desktop app
+edge-tts
+faster-whisper
+numpy
+openwakeword
+psutil
+pvrecorder
+pygame
+PyOpenGL
+PyQt6
+resemblyzer
+silero-vad
+sounddevice
+spotipy
+
+# CUDA-enabled torch build for sentence-transformers, silero-vad, and resemblyzer
+torch --index-url https://download.pytorch.org/whl/cu121
+
+# Test dependencies
+pytest
+
+# External system dependency:
+# Install the Tesseract OCR executable separately and set TESSERACT_CMD if needed.
