@@ -1,27 +1,32 @@
+# agent_service/graph.py
+
 from langgraph.graph import END, StateGraph
 
 from agent_service.brain import build_final_response, llm_route
 from agent_service.models import AgentAction, GraphState
+from agent_service.plugins.executor import execute_registered_tool_for_state
 from agent_service.safety import is_repeated_action, is_safe_action, validate_payload
-from agent_service.tools.memory_tool import get_recent_action_history, save_memory
-from agent_service.tools.search import web_search
-from agent_service.tools.weather import resolve_weather_request
+from agent_service.tools.memory_tool import get_recent_action_history
 
 
 def route_node(state: GraphState) -> GraphState:
     """
-    Use the LLM router to classify user intent.
+    Use the LLM router to classify the user's request.
+
+    Phase 3B change:
+    - router now also sees richer memory_context
     """
     decision = llm_route(
         user_text=state.user_text,
         memories=state.memories,
         history=state.history,
+        memory_context=state.memory_context,
     )
 
     state.intent = decision.intent
     state.extracted_data = decision.extracted_data or {}
     state.confidence = decision.confidence
-    state.tool_result = getattr(decision, "tool_result", None)
+    state.tool_name = decision.tool_name
 
     if decision.action:
         if isinstance(decision.action, dict):
@@ -34,34 +39,14 @@ def route_node(state: GraphState) -> GraphState:
 
 def tool_node(state: GraphState) -> GraphState:
     """
-    Execute agent-side tool calls.
+    Execute tools through the central plugin registry.
     """
-    if state.intent == "weather":
-        # Use the smarter weather resolver.
-        # It reads the original user text and decides whether the user asked for:
-        # current weather, future forecast, historical weather, week summary, or weekend summary.
-        location = state.extracted_data.get("location", "Malabe")
-        state.tool_result = resolve_weather_request(state.user_text, location)
-        state.tool_used = "weather"
-
-    elif state.intent == "search":
-        query = state.extracted_data.get("query", state.user_text)
-        state.tool_result = web_search(query)
-        state.tool_used = "search"
-
-    elif state.intent == "remember":
-        value = state.extracted_data.get("value", state.user_text)
-        key = state.extracted_data.get("key", "user_note")
-        category = state.extracted_data.get("category", "facts")
-        state.tool_result = save_memory(category, key, value)
-        state.tool_used = "memory_save"
-
-    return state
+    return execute_registered_tool_for_state(state)
 
 
 def safety_node(state: GraphState) -> GraphState:
     """
-    Check whether a proposed action is safe and not repeating too much.
+    Validate desktop actions before returning them to the desktop app.
     """
     if state.action is None:
         return state
@@ -94,7 +79,7 @@ def safety_node(state: GraphState) -> GraphState:
 
 def response_node(state: GraphState) -> GraphState:
     """
-    Generate the final spoken response.
+    Build the final natural-language response.
     """
     action_dict = None
 
@@ -112,15 +97,16 @@ def response_node(state: GraphState) -> GraphState:
         action=action_dict,
         memories=state.memories,
         history=state.history,
+        memory_context=state.memory_context,
     )
     return state
 
 
 def should_use_tool(state: GraphState) -> str:
     """
-    Decide the next graph node after routing.
+    Decide graph path after routing.
     """
-    if state.intent in {"weather", "search", "remember"}:
+    if state.tool_name:
         return "tool"
 
     if state.action is not None:
