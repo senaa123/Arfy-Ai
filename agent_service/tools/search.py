@@ -1,30 +1,26 @@
-from ddgs import DDGS
-
+from duckduckgo_search import DDGS
 
 def web_search(query: str) -> dict:
     """
-    Search the web using DDGS.
+    Search the web using DuckDuckGo.
 
     Returns top 3 results in a simple message + raw results.
     """
-    clean_query = query.strip()
-    if not clean_query:
-        return {
-            "success": False,
-            "message": "Search query was empty.",
-        }
 
-    try:
+    try: 
+        #  Create DDGS client and search
         with DDGS() as ddgs:
-            results = list(ddgs.text(clean_query, max_results=3))
-
+            results = list(ddgs.text(query, max_results=3))
+        
+        #nothing found
         if not results:
             return {
                 "success": False,
-                "message": "No search results found.",
+                "message": "No search results found."
             }
-
-        summary_lines = []
+        
+        #Build a readble message
+        summary_lines =  []
         for item in results:
             title = item.get("title", "No title")
             body = item.get("body", "")
@@ -34,11 +30,11 @@ def web_search(query: str) -> dict:
         return {
             "success": True,
             "results": results,
-            "message": "Top search results:\n" + "\n".join(summary_lines),
+            "message": "Top search results:\n" + "\n".join(summary_lines)
         }
-
+    
     except Exception as e:
         return {
             "success": False,
-            "message": f"Search failed: {e}",
+            "message": f"Search failed: {e}"
         }

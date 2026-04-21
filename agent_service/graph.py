@@ -1,32 +1,23 @@
-# agent_service/graph.py
+from langgraph.graph import StateGraph, END
 
-from langgraph.graph import END, StateGraph
-
-from agent_service.brain import build_final_response, llm_route
-from agent_service.models import AgentAction, GraphState
-from agent_service.plugins.executor import execute_registered_tool_for_state
-from agent_service.safety import is_repeated_action, is_safe_action, validate_payload
-from agent_service.tools.memory_tool import get_recent_action_history
+from agent_service.models import GraphState, AgentAction
+from agent_service.brain import llm_route, build_final_response
+from agent_service.safety import is_safe_action, validate_payload, is_repeated_action
+from agent_service.tools.weather import get_weather
+from agent_service.tools.search import web_search
+from agent_service.tools.memory_tool import save_memory, get_recent_action_history
 
 
 def route_node(state: GraphState) -> GraphState:
     """
-    Use the LLM router to classify the user's request.
-
-    Phase 3B change:
-    - router now also sees richer memory_context
+    Use LLM router to classify user intent.
     """
-    decision = llm_route(
-        user_text=state.user_text,
-        memories=state.memories,
-        history=state.history,
-        memory_context=state.memory_context,
-    )
+    decision = llm_route(state.user_text, state.memories)
 
     state.intent = decision.intent
     state.extracted_data = decision.extracted_data or {}
     state.confidence = decision.confidence
-    state.tool_name = decision.tool_name
+    state.tool_result = getattr(decision, "tool_result", None)
 
     if decision.action:
         if isinstance(decision.action, dict):
@@ -39,14 +30,32 @@ def route_node(state: GraphState) -> GraphState:
 
 def tool_node(state: GraphState) -> GraphState:
     """
-    Execute tools through the central plugin registry.
+    Executes tool calls chosen by route_node.
+    This is still within the agent service, not desktop OS execution.
     """
-    return execute_registered_tool_for_state(state)
+    if state.intent == "weather":
+        location = state.extracted_data.get("location", "Malabe")
+        state.tool_result = get_weather(location)
+        state.tool_used = "weather"
+
+    elif state.intent == "search":
+        query = state.extracted_data.get("query", state.user_text)
+        state.tool_result = web_search(query)
+        state.tool_used = "search"
+
+    elif state.intent == "remember":
+        value = state.extracted_data.get("value", state.user_text)
+        key = state.extracted_data.get("key", "user_note")
+        category = state.extracted_data.get("category", "facts")
+        state.tool_result = save_memory(category, key, value)
+        state.tool_used = "memory_save"
+
+    return state
 
 
 def safety_node(state: GraphState) -> GraphState:
     """
-    Validate desktop actions before returning them to the desktop app.
+    Check if the proposed action is safe and not repeated too many times.
     """
     if state.action is None:
         return state
@@ -70,7 +79,7 @@ def safety_node(state: GraphState) -> GraphState:
         state.action = None
         state.tool_result = {
             "success": False,
-            "message": "Repeated action blocked to prevent loops.",
+            "message": "Repeated action blocked to prevent loops."
         }
         return state
 
@@ -79,14 +88,14 @@ def safety_node(state: GraphState) -> GraphState:
 
 def response_node(state: GraphState) -> GraphState:
     """
-    Build the final natural-language response.
+    Final response generation node.
     """
     action_dict = None
 
     if state.action:
         action_dict = {
             "type": state.action.type,
-            "payload": state.action.payload,
+            "payload": state.action.payload
         }
 
     state.response = build_final_response(
@@ -95,18 +104,16 @@ def response_node(state: GraphState) -> GraphState:
         tool_used=state.tool_used or "",
         tool_result=state.tool_result or {},
         action=action_dict,
-        memories=state.memories,
-        history=state.history,
-        memory_context=state.memory_context,
+        memories=state.memories
     )
     return state
 
 
 def should_use_tool(state: GraphState) -> str:
     """
-    Decide graph path after routing.
+    Decide which node should run after routing.
     """
-    if state.tool_name:
+    if state.intent in {"weather", "search", "remember"}:
         return "tool"
 
     if state.action is not None:
@@ -135,7 +142,7 @@ def build_graph():
             "tool": "tool",
             "safety": "safety",
             "response": "response",
-        },
+        }
     )
 
     workflow.add_edge("tool", "response")

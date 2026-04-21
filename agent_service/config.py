@@ -15,7 +15,7 @@ GROQ_MODEL_ROUTER = os.getenv("GROQ_MODEL_ROUTER", "llama-3.1-8b-instant")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # Memory service base URL
-MEMORY_SERVICE_URL = os.getenv("MEMORY_SERVICE_URL", "http://127.0.0.1:8000")
+MEMORY_SERVICE_URL = os.getenv("MEMORY_SERVICE_URL", "http://127.0.0.1:8002")
 
 # Safety config
 MAX_SESSION_TURNS = int(os.getenv("MAX_SESSION_TURNS", "12"))
