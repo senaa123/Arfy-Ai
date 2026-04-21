@@ -3,9 +3,9 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                               QLineEdit)
 from PyQt6.QtCore import Qt, QPoint, pyqtSlot, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen
-from ui.orb import JarvisOrb
-from ui.chat_widget import ChatWidget
-from ui.styles import MAIN_STYLE
+from Ui.orb import JarvisOrb
+from Ui.chat_widget import ChatWidget
+from Ui.styles import MAIN_STYLE
 
 
 class HUDFrame(QWidget):

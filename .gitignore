@@ -9,7 +9,7 @@ __pycache__/
 # Virtual environment
 venv/
 env/
-/Audio/
+Audio/
 Venv/
 # IDE
 .vscode/
@@ -42,14 +42,14 @@ crash_log.txt
 qdrant_data/
 
 # Audio runtime/generated/private files
-
+Audio/owner_voice.npy
+Audio/speech_output.mp3
+Audio/temp_wake.wav
+Audio/samples/
 
 # Python cache
 __pycache__/
 *.py[cod]
 
 # General cache folders
-.cache
-
-#Test folder
-Tests/
+.cache/
