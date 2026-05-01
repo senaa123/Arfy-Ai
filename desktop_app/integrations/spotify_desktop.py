@@ -6,7 +6,7 @@ from pathlib import Path
 import psutil
 from dotenv import load_dotenv
 
-from clients.spotify_client import wait_for_spotify_api
+from ..clients.spotify_client import wait_for_spotify_api
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)

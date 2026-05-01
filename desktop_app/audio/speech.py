@@ -8,10 +8,10 @@ import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
 
-from audio.vad import SileroVAD, PreRollBuffer
-from audio.endpointing import EndpointingConfig, EndpointingState
-from audio.audio_utils import concat_frames, finalize_audio_for_asr
-from audio.transcript_postprocess import postprocess_transcript
+from .vad import SileroVAD, PreRollBuffer
+from .endpointing import EndpointingConfig, EndpointingState
+from .audio_utils import concat_frames, finalize_audio_for_asr
+from .transcript_postprocess import postprocess_transcript
 
 TEMP_LISTEN = Path("Audio/temp_listen.wav")
 

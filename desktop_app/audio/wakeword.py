@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from pvrecorder import PvRecorder
 from openwakeword.model import Model
 
-from audio.voice_auth import is_owner_voice
+from .voice_auth import is_owner_voice
 
 
 env_path = Path(__file__).resolve().parent.parent / ".env"

@@ -19,6 +19,7 @@ from memory_service.services.structured_store import (
     upsert_document_record,
 )
 from memory_service.services.vector_store import save_document_chunk_vector
+from memory_service.routes.rag import router as rag_router
 
 router = APIRouter(tags=["documents"])
 
@@ -130,6 +131,7 @@ async def register_document_chunks(
                     text=chunk_record.text,
                     start_char=chunk_record.start_char,
                     end_char=chunk_record.end_char,
+                    pages=chunk.pages,
                     point_id=existing_link.qdrant_point_id if existing_link else None,
                 )
 
@@ -229,3 +231,6 @@ async def list_document_chunks(
             for row in rows
         ],
     }
+
+#Rag_service
+router.include_router(rag_router)

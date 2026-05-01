@@ -37,6 +37,7 @@ class DocumentChunk(BaseModel):
     text: str
     start_char: int
     end_char: int
+    pages: list[int] = Field(default_factory=list)
 
 
 class ExtractedDocument(BaseModel):

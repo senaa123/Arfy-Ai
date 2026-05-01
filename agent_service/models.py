@@ -138,6 +138,7 @@ class RouteDecision(BaseModel):
         "weather",
         "search",
         "remember",
+        "document_qa", # Rag
         "spotify_play_song",
         "spotify_play_playlist",
         "unknown",

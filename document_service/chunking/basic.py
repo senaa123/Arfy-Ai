@@ -1,15 +1,28 @@
+"""
+Basic text chunking.
+
+Preserves the existing downstream-facing behavior:
+- light text normalization before chunking
+- overlapping chunks with deterministic chunk ids when namespaced
+- DocumentChunk records that storage/memory registration already expect
+"""
+
+from __future__ import annotations
+
 import hashlib
 import re
 import uuid
 
 from document_service.schemas import DocumentChunk
 
+from .strategies import ChunkingStrategy
+
 
 def normalize_text(text: str) -> str:
     """
     Light cleanup before chunking.
     """
-    text = re.sub(r"\r\n?", "\n", text)
+    text = re.sub(r"\r\n?", "\n", text or "")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
@@ -41,7 +54,6 @@ def chunk_text(
     while start < text_length:
         end = min(start + chunk_size, text_length)
 
-        # Prefer ending on whitespace when possible
         if end < text_length:
             last_space = cleaned.rfind(" ", start, end)
             if last_space > start + 200:
@@ -51,9 +63,6 @@ def chunk_text(
 
         if chunk_value:
             if chunk_id_namespace:
-                # Deterministic chunk ids let memory_service upsert the same
-                # chunk row/vector link when the same document snapshot is
-                # ingested again.
                 text_hash = hashlib.sha1(chunk_value.encode("utf-8")).hexdigest()
                 chunk_id = str(
                     uuid.uuid5(
@@ -78,3 +87,20 @@ def chunk_text(
         start += step
 
     return chunks
+
+
+def build_chunks(
+    text: str,
+    strategy: ChunkingStrategy,
+    *,
+    chunk_id_namespace: str | None = None,
+) -> list[DocumentChunk]:
+    """
+    Build chunk records using the selected strategy.
+    """
+    return chunk_text(
+        text=text,
+        chunk_size=strategy.chunk_size,
+        chunk_overlap=strategy.chunk_overlap,
+        chunk_id_namespace=chunk_id_namespace,
+    )

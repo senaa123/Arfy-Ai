@@ -1,14 +1,14 @@
 import queue
 from typing import Optional
 
-from audio.speech import listen
-from audio.tts_engine import speak
-from audio.wakeword import wait_for_wake_word
-from clients.agent_client import ask_agent, agent_health_check, end_agent_session
-from clients.memory_client import log_action, memory_health_check
-from local_actions.action_executor import execute_action
-from local_actions.intent_router import route_local_intent
-from session_state import create_session_id
+from .audio.speech import listen
+from .audio.tts_engine import speak
+from .audio.wakeword import wait_for_wake_word
+from .clients.agent_client import ask_agent, agent_health_check, end_agent_session
+from .clients.memory_client import log_action, memory_health_check
+from .local_actions.action_executor import execute_action
+from .local_actions.intent_router import route_local_intent
+from .session_state import create_session_id
 
 
 class ArfyDesktopRuntime:
@@ -37,8 +37,8 @@ class ArfyDesktopRuntime:
         self.window = window
         self.ui = ui
 
-        self.typed_queue: queue.Queue[str] = queue.Queue()
-        self.input_mode = False
+        self.typed_queue: queue.Queue[str] = queue.Queue() # create queue for typed msg
+        self.input_mode = False #start voice mode
         self.current_session_id: Optional[str] = None
 
     def submit_text(self, text: str) -> None:
@@ -48,7 +48,7 @@ class ArfyDesktopRuntime:
         self.typed_queue.put(text)
 
     # -------------------------
-    # NEW: local system status check
+    # local system status check
     # -------------------------
     def handle_system_status_command(self, text: str) -> bool:
         """

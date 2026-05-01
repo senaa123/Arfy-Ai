@@ -1,4 +1,4 @@
-from audio.voice_auth import enroll_voice
+from .audio.voice_auth import enroll_voice
 
 
 def main() -> None:

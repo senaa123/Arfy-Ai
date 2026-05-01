@@ -181,6 +181,7 @@ def save_document_chunk_vector(
     text: str,
     start_char: int,
     end_char: int,
+    pages: list[int] | None = None,
     point_id: str | None = None,
 ) -> str:
     """
@@ -213,6 +214,7 @@ def save_document_chunk_vector(
         "chunk_index": chunk_index,
         "start_char": start_char,
         "end_char": end_char,
+        "pages": [int(page) for page in (pages or []) if isinstance(page, int) or str(page).isdigit()],
     }
 
     return upsert_vector_point(
@@ -271,5 +273,84 @@ def semantic_retrieve(
                 "end_char": item.get("end_char"),
             }
         )
+
+    return normalized
+
+# Rag_service 
+def search_document_chunks(
+    *,
+    query: str,
+    top_k: int = 8,
+    document_ids: list[str] | None = None,
+    session_id: str | None = None,
+) -> list[dict]:
+    """
+    Search only indexed document chunks for RAG.
+
+    Why this exists:
+    - /memory/context merges exact, document metadata, and semantic memories
+    - rag_service needs a narrower API that returns only document chunks
+    - optional document_ids allows the caller to scope search to known documents
+
+    Notes:
+    - session_id is accepted for forward compatibility and debugging, even though
+      the current document chunk vectors are not session-scoped.
+    - query_collection() does not support server-side filters today, so we
+      over-fetch and filter in-process when document_ids are provided.
+    """
+    _ = session_id
+
+    clean_query = str(query or "").strip()
+    if not clean_query:
+        return []
+
+    requested_ids = [str(doc_id).strip() for doc_id in (document_ids or []) if str(doc_id).strip()]
+    requested_id_set = set(requested_ids)
+
+    # Over-fetch so post-filtering by document_id still has a good chance of
+    # returning enough results. query_collection() itself already does internal
+    # over-fetching against Qdrant, so this remains simple while working well
+    # enough for Phase 1 RAG.
+    raw_hits = query_collection(
+        query=clean_query,
+        collection_name=DOCUMENT_COLLECTION,
+        limit=max(top_k * 5, top_k),
+    )
+
+    normalized: list[dict] = []
+
+    for item in raw_hits:
+        document_id = str(item.get("document_id") or "").strip()
+        if requested_id_set and document_id not in requested_id_set:
+            continue
+
+        chunk_id = str(item.get("public_id") or item.get("id") or "").strip()
+        text = str(item.get("value") or "").strip()
+
+        if not chunk_id or not document_id or not text:
+            continue
+
+        normalized.append(
+            {
+                "chunk_id": chunk_id,
+                "document_id": document_id,
+                "text": text,
+                "score": float(item.get("score") or 0.0),
+                "source_ref": item.get("source_ref"),
+                "file_name": item.get("file_name"),
+                "metadata": {
+                    "extension": item.get("extension"),
+                    "chunk_index": item.get("chunk_index"),
+                    "start_char": item.get("start_char"),
+                    "end_char": item.get("end_char"),
+                    # Phase 1 note: page metadata may not exist yet for all chunks.
+                    # Returning a stable key now makes citation plumbing easier later.
+                    "pages": item.get("pages") or [],
+                },
+            }
+        )
+
+        if len(normalized) >= top_k:
+            break
 
     return normalized
