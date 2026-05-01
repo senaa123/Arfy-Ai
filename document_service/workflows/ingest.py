@@ -38,6 +38,14 @@ def _extract_document_by_type(file_path: str, enable_ocr: bool, pdf_ocr_min_char
     - no local OCR engine is used here
     """
     path = Path(file_path)
+
+    # Fail early with a clear message if the desktop sends an invalid path.
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    if not path.is_file():
+        raise ValueError(f"Path is not a file: {file_path}")
+    
     extension = path.suffix.lower()
 
     if extension == ".pdf":

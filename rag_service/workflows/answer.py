@@ -101,7 +101,7 @@ def answer_question_workflow(req: RagAskRequest) -> RagAskResponse:
         final_k=final_k,
     )
 
-    first_grounding = judge_grounding(first_reranked)
+    first_grounding = judge_grounding(first_reranked, question=question)
 
     if first_grounding.grounded:
         answer, citations = build_grounded_answer(question, first_reranked)
@@ -170,7 +170,7 @@ def answer_question_workflow(req: RagAskRequest) -> RagAskResponse:
         candidate_chunks=repaired_retrieved,
     )
 
-    repaired_grounding = judge_grounding(expanded_evidence)
+    repaired_grounding = judge_grounding(expanded_evidence, question=question)
 
     if not repaired_grounding.grounded:
         return _build_failure_response(

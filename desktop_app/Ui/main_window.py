@@ -3,6 +3,9 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                               QLineEdit)
 from PyQt6.QtCore import Qt, QPoint, pyqtSlot, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
+                             QHBoxLayout, QLabel, QPushButton,
+                             QLineEdit, QFileDialog)
 from .orb import JarvisOrb
 from .chat_widget import ChatWidget
 from .styles import MAIN_STYLE
@@ -46,6 +49,10 @@ class ArfyWindow(QMainWindow):
         self.setStyleSheet(MAIN_STYLE)
         self.setFixedSize(380, 560)
         self._drag_pos = QPoint()
+
+        # Stores the last file path selected through the native picker.
+        # DesktopUIBridge reads this value back safely after the dialog closes.
+        self._last_picked_document_path = ""
         self._build_ui()
 
     def _build_ui(self):
@@ -215,3 +222,27 @@ class ArfyWindow(QMainWindow):
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self._drag_pos)
+
+    # Native file picker integration
+    @pyqtSlot()
+    def open_document_picker(self):
+        """
+        Open the native file picker on the UI thread.
+
+        The selected path is stored on the window instance so the runtime
+        thread can read it back through DesktopUIBridge.
+        """
+        file_filter = (
+            "supported documents (*.pdf *.docx *.txt *.md *.py *.json *.yaml "
+            "*.yml *.log *.csv *.png *.jpg *.jpeg *.bmp *.tiff *.tif *.webp);;"
+            "All Files (*)"
+        )
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select a document for Arfy",
+            "",
+            file_filter,
+        )
+
+        self._last_picked_document_path = (file_path or "").strip()

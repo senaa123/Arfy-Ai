@@ -1,0 +1,1 @@
+Arfy separates document ingestion from retrieval. The document_service extracts and chunks files. The memory_service stores document metadata and chunks. The rag_service retrieves chunks and creates grounded answers. After upload, document chunks are indexed in memory_service for later retrieval.

@@ -183,6 +183,34 @@ def looks_like_weather_request(text: str) -> bool:
 
     return False
 
+#Document upload
+def looks_like_document_upload_request(text: str) -> bool:
+    """
+    Detect requests where the desktop should open a file picker and send the
+    selected file to document_service.
+    """
+    lower = text.lower().strip()
+
+    direct_phrases = [
+        "upload a document",
+        "upload document",
+        "upload a file",
+        "ingest a document",
+        "ingest document",
+        "ingest a file",
+        "import a document",
+        "add a document",
+    ]
+    if any(phrase in lower for phrase in direct_phrases):
+        return True
+    
+    upload_terms = ["upload", "ingest", "import", "add"]
+    document_terms = ["document", "file", "pdf", "docx", "csv", "image", "text file"]
+
+    return any(term in lower for term in upload_terms) and any(
+        term in lower for term in document_terms
+    )
+
 # rag
 def _candidate_document_ids(memories: List[MemoryItem]) -> list[str]:
     """
@@ -333,6 +361,24 @@ def parse_route_decision(
                 "document_ids": _candidate_document_ids(memories),
             },
             tool_name="rag_ask",
+        )
+    
+        # Document upload / ingest
+    if looks_like_document_upload_request(user_text):
+        return RouteDecision(
+            intent="document_upload",
+            confidence=0.94,
+            action={
+                "type": "pick_and_ingest_document",
+                "payload": {
+                    "enable_ocr": True,
+                    "persist": True,
+                    "pdf_ocr_min_chars": 30,
+                    "chunk_size": 1200,
+                    "chunk_overlap": 200,
+                    "index_chunks_to_vector": True,
+                },
+            },
         )
 
     # Spotify playlist
@@ -549,6 +595,12 @@ def build_action_response(action: dict) -> str:
     if action_type == "spotify_play_playlist":
         playlist_name = payload.get("playlist_name", "that playlist")
         return f"I'm going to play the {playlist_name} playlist on Spotify."
+    
+    if action_type == "pick_and_ingest_document":
+        return (
+            "I'm opening the file picker. Choose the document you want me to "
+            "send to the document service."
+        )
 
     return "Okay, I'm doing that now."
 

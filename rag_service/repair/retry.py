@@ -52,6 +52,7 @@ _DOCUMENT_WRAPPERS = [
 ]
 
 _GENERIC_SUMMARY_QUERY = "main topics summary"
+_UPLOAD_DESTINATION_QUERY = "uploaded document chunks stored after document ingestion"
 
 
 def _normalize_spaces(text: str) -> str:
@@ -98,6 +99,19 @@ def _rewrite_query_for_retrieval(question: str) -> str:
 
     lower = q.lower()
 
+    if "upload" in lower and any(
+        phrase in lower
+        for phrase in (
+            "where does",
+            "where do",
+            "where is",
+            "where are",
+            "where did",
+            "after upload",
+        )
+    ):
+        return _UPLOAD_DESTINATION_QUERY
+
     # Pattern: "what does the document say about pricing"
     # Also covers variants like "what the file says about deadlines".
     match = re.search(r"(?:say|says)\s+about\s+(.+)$", lower)
@@ -121,6 +135,21 @@ def _rewrite_query_for_retrieval(question: str) -> str:
 
     # Remove obvious document wrappers while keeping the meaningful content.
     cleaned = _normalize_spaces(wrapper_reduced.strip(" ?.! ,"))
+    cleaned = re.sub(
+        r"^(?:what|who|where)\s+(?:is|are|was|were)\s+",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"\b(?:mentioned|listed|shown)\s+(?:in|on|within)?$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"^the\s+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b(?:in|on|within|about|of)$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = _normalize_spaces(cleaned.strip(" ?.! ,"))
     return cleaned or _normalize_spaces(question)
 
 

@@ -17,6 +17,7 @@ Rules:
 - Never claim a tool was used unless tool_used is present.
 - Never claim the desktop app will do something unless an action exists.
 - If the user gives a vague follow-up and there is no pending action, do not guess what "that" means.
+- If the user asks to upload, ingest, or import a document, return a structured desktop action.
 """
 
 
@@ -29,6 +30,7 @@ close_app
 weather
 search
 remember
+document_upload
 document_qa
 spotify_play_song
 spotify_play_playlist
@@ -47,6 +49,7 @@ Rules:
 - If user says "play <playlist> playlist", use spotify_play_playlist.
 - If user says "play <song>", use spotify_play_song.
 - If user does not mention a weather location, leave it empty and memory can fill it later.
+- If user says "upload a document", "upload a file", or "ingest a document", use document_upload.
 """
 
 

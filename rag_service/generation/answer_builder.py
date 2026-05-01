@@ -65,6 +65,38 @@ def _clean_generated_answer(answer: str) -> str:
     return cleaned
 
 
+def _build_evidence_fallback_answer(
+    *,
+    citations: list[RagCitation],
+) -> str:
+    """
+    Return a bounded evidence-only answer when the LLM backend is unavailable.
+
+    Retrieval and grounding have already succeeded before this builder is
+    called, so this fallback preserves the useful cited evidence without
+    inventing a synthesized claim.
+    """
+    evidence_lines: list[str] = []
+
+    for citation in citations:
+        snippet = (citation.snippet or "").strip()
+        if not snippet:
+            continue
+        evidence_lines.append(f"[{citation.label}] {snippet}")
+
+    if not evidence_lines:
+        return (
+            "I found grounded document evidence, but I could not reach the "
+            "answer model right now."
+        )
+
+    evidence = " ".join(evidence_lines)
+    return (
+        "I found grounded document evidence, but I could not reach the answer "
+        f"model right now. Closest evidence: {evidence}"
+    )
+
+
 def build_grounded_answer(question: str, chunks: list[RetrievedChunk]) -> tuple[str, list[RagCitation]]:
     """
     Build a grounded answer strictly from the supplied evidence chunks.
@@ -107,9 +139,12 @@ def build_grounded_answer(question: str, chunks: list[RetrievedChunk]) -> tuple[
     )
 
     client = LLMClient()
-    answer = client.generate_answer(
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-    )
+    try:
+        answer = client.generate_answer(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+    except Exception:
+        answer = _build_evidence_fallback_answer(citations=citations)
 
     return _clean_generated_answer(answer), citations

@@ -9,7 +9,7 @@ from agent_service.plugins.base import ToolContext, ToolPlugin, ToolSpec
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
-RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL")
+RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", "http://127.0.0.1:8004")
 
 
 def _collect_candidate_document_ids(context: ToolContext) -> list[str]:

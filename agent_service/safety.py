@@ -7,6 +7,7 @@ SAFE_ACTIONS = {
     "spotify_play_playlist",
     "spotify_play_song",
     "service_health_check",
+    "pick_and_ingest_document",
 }
 
 ALLOWED_APPS = {
@@ -50,7 +51,27 @@ def validate_payload(action_type: str, payload: Dict) -> bool:
     if action_type == "service_health_check":
         service_name = str(payload.get("service_name", "")).strip().lower()
         return service_name in ALLOWED_SERVICES
+    
+    if action_type == "pick_and_ingest_document":
+        enable_ocr = payload.get("enable_ocr", True)
+        persist = payload.get("persist", True)
+        pdf_ocr_min_chars = payload.get("pdf_ocr_min_chars", 30)
+        chunk_size = payload.get("chunk_size", 1200)
+        chunk_overlap = payload.get("chunk_overlap", 200)
+        index_chunks_to_vector = payload.get("index_chunks_to_vector", True)
 
+        return (
+            isinstance(enable_ocr, bool)
+            and isinstance(persist, bool)
+            and isinstance(index_chunks_to_vector, bool)
+            and isinstance(pdf_ocr_min_chars, int)
+            and 0 <= pdf_ocr_min_chars <= 10000
+            and isinstance(chunk_size, int)
+            and 100 <= chunk_size <= 20000
+            and isinstance(chunk_overlap, int)
+            and 0 <= chunk_overlap < chunk_size
+        )
+    
     return False
 
 
