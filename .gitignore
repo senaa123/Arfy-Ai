@@ -54,3 +54,4 @@ __pycache__/
 #Test folder
 Tests/
 data/
+test_documents/
