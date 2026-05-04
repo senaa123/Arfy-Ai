@@ -64,6 +64,19 @@ def build_portable_document_id(
     return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
 
 
+def build_stable_document_id(file_path: str) -> str:
+    """
+    Backward-compatible convenience helper for portable document identity.
+    """
+    path = Path(file_path)
+    text = path.read_text(encoding="utf-8", errors="ignore") if path.is_file() else ""
+    return build_portable_document_id(
+        file_name=path.name,
+        extension=path.suffix.lower(),
+        text=text,
+    )
+
+
 def build_local_snapshot_id(file_path: str) -> str:
     """
     Build a local-only snapshot id.

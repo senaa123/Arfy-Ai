@@ -2,7 +2,20 @@ from resemblyzer import VoiceEncoder, preprocess_wav
 import numpy as np
 import os
 
-encoder = VoiceEncoder("cuda")  # cpu by default
+
+def _create_voice_encoder() -> VoiceEncoder:
+    """
+    Voice auth should not make the desktop depend on a working CUDA/cuDNN stack.
+    """
+    device = os.getenv("ARFY_VOICE_AUTH_DEVICE", "cpu")
+    try:
+        return VoiceEncoder(device)
+    except Exception as e:
+        print(f"Voice encoder {device} init failed, falling back to CPU: {e}")
+        return VoiceEncoder("cpu")
+
+
+encoder = _create_voice_encoder()
 
 OWNER_VOICE = "E:/Data Science/Arfy-Ai/Audio/owner_voice.npy"
 SAMPLES_FOLDER = "E:/Data Science/Arfy-Ai/Audio/samples/"

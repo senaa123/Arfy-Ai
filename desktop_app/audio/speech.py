@@ -1,25 +1,126 @@
 from pathlib import Path
 from typing import Optional
 from collections import deque
+import gc
 import queue
+import sys
 import time
+import os
+
+from dotenv import load_dotenv
+
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(env_path)
+
+# Keep MKL/OpenMP scratch allocations modest before numeric libraries load.
+for _thread_env_name in (
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ.setdefault(_thread_env_name, "1")
+os.environ.setdefault("MKL_DISABLE_FAST_MM", "1")
+os.environ.setdefault("KMP_BLOCKTIME", "0")
 
 import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
 
-from audio.vad import SileroVAD, PreRollBuffer
-from audio.endpointing import EndpointingConfig, EndpointingState
-from audio.audio_utils import concat_frames, finalize_audio_for_asr
-from audio.transcript_postprocess import postprocess_transcript
+from .vad import SileroVAD, PreRollBuffer
+from .endpointing import EndpointingConfig, EndpointingState
+from .audio_utils import concat_frames, finalize_audio_for_asr
+from .transcript_postprocess import postprocess_transcript
 
 TEMP_LISTEN = Path("Audio/temp_listen.wav")
 
 # Lazy-loaded whisper model cache
 _whisper_model = None
+_whisper_model_config: tuple[str, str, str] | None = None
 
 # Stores the most recent finalized chunk captured for ASR
 _last_captured_audio: Optional[np.ndarray] = None
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except ValueError:
+        return default
+
+
+def _configured_whisper_model_name() -> str:
+    return os.getenv("ARFY_WHISPER_MODEL", "base.en").strip() or "base.en"
+
+
+def _configured_asr_device() -> str:
+    return os.getenv("ARFY_ASR_DEVICE", "cpu").strip() or "cpu"
+
+
+def _configured_asr_compute_type() -> str:
+    return os.getenv("ARFY_ASR_COMPUTE_TYPE", "int8").strip() or "int8"
+
+
+def _create_whisper_model(model_name: str, device: str, compute_type: str):
+    print(f"Loading Whisper model: {model_name} on {device}/{compute_type}")
+    return WhisperModel(
+        model_name,
+        device=device,
+        compute_type=compute_type,
+        cpu_threads=_env_int("ARFY_ASR_CPU_THREADS", 1),
+        num_workers=_env_int("ARFY_ASR_NUM_WORKERS", 1),
+    )
+
+
+def _release_whisper_model() -> None:
+    global _whisper_model, _whisper_model_config
+
+    old_model = _whisper_model
+    _whisper_model = None
+    _whisper_model_config = None
+    del old_model
+    gc.collect()
+
+    torch = sys.modules.get("torch")
+    cuda = getattr(torch, "cuda", None) if torch is not None else None
+    if cuda is not None:
+        try:
+            if cuda.is_available():
+                cuda.empty_cache()
+        except Exception:
+            pass
+
+
+def _split_model_list(raw: str) -> list[str]:
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _default_fallback_models(primary_model: str) -> list[str]:
+    lower_name = primary_model.lower()
+    if "large" in lower_name or "medium" in lower_name:
+        return ["small.en", "base.en", "tiny.en"]
+    if "small" in lower_name:
+        return ["base.en", "tiny.en"]
+    if "base" in lower_name:
+        return ["tiny.en"]
+    if "tiny" in lower_name:
+        return []
+    return ["tiny.en"]
+
+
+def _fallback_model_names(primary_model: str) -> list[str]:
+    configured = os.getenv("ARFY_ASR_FALLBACK_MODELS")
+    fallback_models = (
+        _split_model_list(configured)
+        if configured is not None
+        else _default_fallback_models(primary_model)
+    )
+
+    model_names: list[str] = []
+    for model_name in [primary_model] + fallback_models:
+        if model_name and model_name not in model_names:
+            model_names.append(model_name)
+    return model_names
 
 
 def get_last_captured_audio() -> Optional[np.ndarray]:
@@ -42,12 +143,90 @@ def get_whisper_model():
     - Avoid loading the heavy model at desktop startup
     - Only load when user actually speaks
     """
-    global _whisper_model
+    global _whisper_model, _whisper_model_config
 
     if _whisper_model is None:
-        _whisper_model = WhisperModel("medium", device="cuda", compute_type="float16")
+        model_name = _configured_whisper_model_name()
+        device = _configured_asr_device()
+        compute_type = _configured_asr_compute_type()
+        _whisper_model = _create_whisper_model(model_name, device, compute_type)
+        _whisper_model_config = (model_name, device, compute_type)
 
     return _whisper_model
+
+
+def _reset_whisper_model(
+    *,
+    model_name: str | None = None,
+    device: str = "cpu",
+    compute_type: str = "int8",
+):
+    """
+    Recreate Whisper on a safer backend after GPU/cuDNN failures.
+    """
+    global _whisper_model, _whisper_model_config
+
+    _release_whisper_model()
+    model_name = model_name or _configured_whisper_model_name()
+    _whisper_model = _create_whisper_model(model_name, device, compute_type)
+    _whisper_model_config = (model_name, device, compute_type)
+    return _whisper_model
+
+
+def _resolve_input_device(sample_rate: int, channels: int) -> int | None:
+    """
+    Pick a stable input device.
+
+    Windows MME defaults can fail with PaError -9999. Prefer an explicit
+    ARFY_INPUT_DEVICE, then a WASAPI input, then PortAudio's default.
+    """
+    configured = os.getenv("ARFY_INPUT_DEVICE")
+    if configured:
+        try:
+            return int(configured)
+        except ValueError:
+            pass
+
+    try:
+        devices = sd.query_devices()
+    except Exception:
+        return None
+
+    wasapi_devices: list[int] = []
+    directsound_devices: list[int] = []
+    other_devices: list[int] = []
+    for index, device_info in enumerate(devices):
+        if int(device_info.get("max_input_channels", 0) or 0) < channels:
+            continue
+
+        hostapi_name = ""
+        try:
+            hostapi = sd.query_hostapis(device_info.get("hostapi"))
+            hostapi_name = str(hostapi.get("name", ""))
+        except Exception:
+            pass
+
+        upper_hostapi = hostapi_name.upper()
+        if "WASAPI" in upper_hostapi:
+            wasapi_devices.append(index)
+        elif "DIRECTSOUND" in upper_hostapi:
+            directsound_devices.append(index)
+        else:
+            other_devices.append(index)
+
+    for index in wasapi_devices + directsound_devices + other_devices:
+        try:
+            sd.check_input_settings(
+                device=index,
+                samplerate=sample_rate,
+                channels=channels,
+                dtype="float32",
+            )
+            return index
+        except Exception:
+            continue
+
+    return None
 
 
 def get_prompt() -> str:
@@ -72,6 +251,20 @@ def get_prompt() -> str:
         "calculator",
     ]
     return ", ".join(words)
+
+
+def _transcribe_with_model(model, audio: np.ndarray) -> Optional[str]:
+    segments, _ = model.transcribe(
+        audio,
+        language="en",
+        initial_prompt=get_prompt(),
+        vad_filter=False,
+        beam_size=1,
+    )
+
+    text = " ".join(segment.text for segment in segments).strip()
+    text = postprocess_transcript(text)
+    return text.lower().strip() if text else None
 
 
 class SpeechRecorder:
@@ -101,7 +294,11 @@ class SpeechRecorder:
         # Number of samples per frame
         self.frame_samples = int(sample_rate * frame_ms / 1000)
 
-        self.input_device = input_device
+        self.input_device = (
+            input_device
+            if input_device is not None
+            else _resolve_input_device(sample_rate=sample_rate, channels=channels)
+        )
 
         # Queue where callback thread places audio frames
         self.audio_queue: "queue.Queue[np.ndarray]" = queue.Queue()
@@ -156,6 +353,7 @@ class SpeechRecorder:
         start_time = time.time()
 
         print("Sounddevice default input:", sd.default.device)
+        print("Sounddevice selected input:", self.input_device)
 
         with sd.InputStream(
             samplerate=self.sample_rate,
@@ -250,30 +448,40 @@ def _transcribe_array(audio: np.ndarray) -> Optional[str]:
     2. clean transcript using transcript_postprocess.py
     3. reject low-content result if cleanup returns empty
     """
+    audio = np.ascontiguousarray(audio, dtype=np.float32)
+
     try:
         model = get_whisper_model()
-
-        segments, _ = model.transcribe(
-            audio,
-            language="en",
-            initial_prompt=get_prompt(),
-            vad_filter=False,
-            beam_size=1,
-        )
-
-        # Join all segment texts into one transcript
-        text = " ".join(segment.text for segment in segments).strip()
-
-        # Centralized transcript cleanup
-        text = postprocess_transcript(text)
-
-        if not text:
-            return None
-
-        return text.lower().strip()
+        return _transcribe_with_model(model, audio)
 
     except Exception as e:
         print(f"Transcription error: {e}")
+
+        model_config = _whisper_model_config or ("", "", "")
+        primary_model = model_config[0] or _configured_whisper_model_name()
+
+        for fallback_model_name in _fallback_model_names(primary_model):
+            fallback_config = (fallback_model_name, "cpu", "int8")
+            if fallback_config == model_config:
+                continue
+
+            try:
+                print(
+                    "Retrying transcription with "
+                    f"{fallback_model_name} on CPU/int8..."
+                )
+                model = _reset_whisper_model(
+                    model_name=fallback_model_name,
+                    device="cpu",
+                    compute_type="int8",
+                )
+                return _transcribe_with_model(model, audio)
+            except Exception as fallback_error:
+                print(
+                    "Transcription retry failed for "
+                    f"{fallback_model_name} on CPU/int8: {fallback_error}"
+                )
+
         return None
 
 

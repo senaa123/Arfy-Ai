@@ -1,14 +1,16 @@
 import queue
+from pathlib import Path
 from typing import Optional
 
-from audio.speech import listen
-from audio.tts_engine import speak
-from audio.wakeword import wait_for_wake_word
-from clients.agent_client import ask_agent, agent_health_check, end_agent_session
-from clients.memory_client import log_action, memory_health_check
-from local_actions.action_executor import execute_action
-from local_actions.intent_router import route_local_intent
-from session_state import create_session_id
+from .audio.speech import listen
+from .audio.tts_engine import speak
+from .audio.wakeword import wait_for_wake_word
+from .clients.agent_client import ask_agent, agent_health_check, end_agent_session
+from .clients.memory_client import log_action, memory_health_check
+from .clients.document_client import ingest_document
+from .local_actions.action_executor import execute_action
+from .local_actions.intent_router import route_local_intent
+from .session_state import create_session_id
 
 
 class ArfyDesktopRuntime:
@@ -37,8 +39,8 @@ class ArfyDesktopRuntime:
         self.window = window
         self.ui = ui
 
-        self.typed_queue: queue.Queue[str] = queue.Queue()
-        self.input_mode = False
+        self.typed_queue: queue.Queue[str] = queue.Queue() # create queue for typed msg
+        self.input_mode = False #start voice mode
         self.current_session_id: Optional[str] = None
 
     def submit_text(self, text: str) -> None:
@@ -48,7 +50,7 @@ class ArfyDesktopRuntime:
         self.typed_queue.put(text)
 
     # -------------------------
-    # NEW: local system status check
+    # local system status check
     # -------------------------
     def handle_system_status_command(self, text: str) -> bool:
         """
@@ -107,7 +109,7 @@ class ArfyDesktopRuntime:
         """
         if self.input_mode:
             try:
-                return self.typed_queue.get(timeout=60)
+                return self.typed_queue.get(timeout=60) # get  typed input
             except queue.Empty:
                 return None
         else:
@@ -153,7 +155,7 @@ class ArfyDesktopRuntime:
 
         if command == "goodbye":
             self.input_mode = False
-            self.ui.hide_input()
+            self.ui.hide_input() # hide input field
             self.ui.set_mode_label("VOICE MODE")
 
             self.finalize_current_session()
@@ -175,6 +177,81 @@ class ArfyDesktopRuntime:
         # Preserve current behavior for commands that are routed locally
         # but not yet implemented in the desktop shell.
         return True
+    
+
+    def handle_document_upload_action(self, action: dict) -> tuple[bool, str]:
+        """
+        Run the desktop-side document upload flow.
+
+        Why this stays in the desktop runtime:
+        - the agent only decides that document upload should happen
+        - the desktop owns the native file picker
+        - the desktop sends the selected local file path directly to
+          document_service
+        """
+        payload = action.get("payload", {}) or {}
+
+        # Progress message shown in chat UI before the picker opens.
+        self.ui.add_chat("Arfy", "Choose a document from the file picker.")
+
+        selected_file = self.ui.pick_document_file()
+        if not selected_file:
+            return False, "Document upload cancelled."
+
+        selected_name = Path(selected_file).name
+        self.ui.add_chat(
+            "Arfy",
+            f"Selected {selected_name}. Sending it to the document service...",
+        )
+
+        result = ingest_document(
+            file_path=selected_file,
+            enable_ocr=payload.get("enable_ocr", True),
+            persist=payload.get("persist", True),
+            pdf_ocr_min_chars=payload.get("pdf_ocr_min_chars", 30),
+            chunk_size=payload.get("chunk_size", 1200),
+            chunk_overlap=payload.get("chunk_overlap", 200),
+            index_chunks_to_vector=payload.get("index_chunks_to_vector", True),
+        )
+
+        if not result.get("success", False):
+            return False, result.get("message", "Document ingestion failed.")
+
+        file_name = result.get("file_name") or selected_name
+        document_id = result.get("document_id")
+        chunk_count = int(result.get("chunk_count", 0) or 0)
+        chunks_indexed = int(result.get("chunks_indexed", 0) or 0)
+        memory_registered = bool(result.get("memory_registered", False))
+        ocr_used = bool(result.get("ocr_used", False))
+
+        # Preview is useful in chat UI, but we do not need to make the spoken
+        # response too long.
+        preview = str(result.get("preview", "")).strip()
+        if preview:
+            self.ui.add_chat("Arfy", f"Preview: {preview}")
+
+        response_parts = [
+            f"I uploaded {file_name} to the document service.",
+            f"It created {chunk_count} chunks.",
+        ]
+
+        if memory_registered:
+            if chunks_indexed > 0:
+                response_parts.append(
+                    f"{chunks_indexed} chunks were indexed in memory service."
+                )
+            else:
+                response_parts.append(
+                    "The document metadata was registered in memory service."
+                )
+
+        if ocr_used:
+            response_parts.append("OCR was used during extraction.")
+
+        if document_id:
+            response_parts.append(f"Document ID: {document_id}.")
+
+        return True, " ".join(response_parts)
 
     # -------------------------
     # Main command handling
@@ -184,12 +261,12 @@ class ArfyDesktopRuntime:
         Handle one user utterance during an active wake session.
         """
         if not text:
-            return True
+            return True # keep session alive
 
         if not self.current_session_id:
-            self.current_session_id = create_session_id()
+            self.current_session_id = create_session_id() # create session
 
-        normalized_text = text.strip().lower()
+        normalized_text = text.strip().lower() 
 
         if any(phrase in normalized_text for phrase in ["switch to input mode", "input mode"]):
             return self.handle_local_command("switch_input_mode")
@@ -204,7 +281,7 @@ class ArfyDesktopRuntime:
             self.ui.set_state("idle")
 
             try:
-                text = self.typed_queue.get(timeout=30)
+                text = self.typed_queue.get(timeout=60)
                 normalized_text = text.strip().lower()
                 self.ui.hide_input()
             except queue.Empty:
@@ -220,7 +297,7 @@ class ArfyDesktopRuntime:
         if any(word in normalized_text for word in ["stop", "exit", "quit"]):
             return self.handle_local_command("shutdown")
 
-        # NEW:
+        
         # Run local system status check only when explicitly requested.
         if self.handle_system_status_command(text):
             return True
@@ -247,7 +324,12 @@ class ArfyDesktopRuntime:
         print("ACTION FROM AGENT:", action)
 
         if action:
-            success, action_message = execute_action(action)
+            action_type = action.get("type")
+
+            if action_type == "pick_and_ingest_document":
+                success, action_message = self.handle_document_upload_action(action)
+            else:
+                success, action_message = execute_action(action)
 
             log_action(
                 action=str(action),
@@ -257,8 +339,10 @@ class ArfyDesktopRuntime:
 
             print(action_message)
 
-            # For normal actions, only replace spoken reply if execution failed.
-            if not success:
+            # Document upload returns the final user-facing result from the
+            # desktop flow, so always use that message.
+            # For other actions, only replace the spoken reply when execution failed.
+            if action_type == "pick_and_ingest_document" or not success:
                 response = action_message
 
         self.ui.set_state("speaking")

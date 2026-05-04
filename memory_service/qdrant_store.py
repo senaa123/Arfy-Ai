@@ -240,6 +240,7 @@ def query_collection(query: str, collection_name: str, limit: int = 5) -> list[d
                 "chunk_index": payload.get("chunk_index"),
                 "start_char": payload.get("start_char"),
                 "end_char": payload.get("end_char"),
+                "pages": payload.get("pages") or [],
             }
         )
 

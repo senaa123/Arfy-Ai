@@ -80,6 +80,7 @@ class DocumentChunkSaveItem(BaseModel):
     text: str
     start_char: int
     end_char: int
+    pages: List[int] = Field(default_factory=list)
 
 
 class DocumentChunkBatchRegisterRequest(BaseModel):
@@ -175,3 +176,41 @@ class SessionFinalizeRequest(BaseModel):
     messages: List[ChatMessage] = Field(default_factory=list)
     session_started_at: Optional[str] = None
     session_ended_at: Optional[str] = None
+
+#Rag_service
+class DocumentChunkSearchRequest(BaseModel):
+    """
+    Request model for RAG-oriented document chunk search.
+
+    This is intentionally separate from the richer /memory/context retrieval path:
+    - RAG wants only document chunks
+    - optional document_ids lets caller narrow retrieval to known documents
+    - session_id is accepted for future narrowing/debugging even if unused today
+    """
+
+    query: str
+    document_ids: List[str] = Field(default_factory=list)
+    top_k: int = 8
+    session_id: Optional[str] = None
+
+
+class DocumentChunkSearchItem(BaseModel):
+    """
+    One normalized chunk returned to rag_service.
+    """
+
+    chunk_id: str
+    document_id: str
+    text: str
+    score: float = 0.0
+    source_ref: Optional[str] = None
+    file_name: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DocumentChunkSearchResponse(BaseModel):
+    """
+    Response model for RAG chunk search.
+    """
+
+    chunks: List[DocumentChunkSearchItem] = Field(default_factory=list)

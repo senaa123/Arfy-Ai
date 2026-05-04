@@ -52,3 +52,24 @@ class DesktopUIBridge:
             Qt.ConnectionType.QueuedConnection,
             Q_ARG(str, mode),
         )
+    
+    # Document picker method that blocks until the user picks a file or cancels
+    def pick_document_file(self):
+        """
+        Open the native document picker on the Qt thread and return the path.
+
+        Important:
+        - runtime.py runs outside the UI thread
+        - QFileDialog must open on the Qt/UI thread
+        - BlockingQueuedConnection is intentional here so the runtime waits
+          until the user finishes selecting or cancels the picker
+        """
+        self.window._last_picked_document_path = ""
+
+        QMetaObject.invokeMethod(
+            self.window,
+            "open_document_picker",
+            Qt.ConnectionType.BlockingQueuedConnection,
+        )
+
+        return getattr(self.window, "_last_picked_document_path", "")

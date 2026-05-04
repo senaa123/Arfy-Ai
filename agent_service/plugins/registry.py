@@ -9,7 +9,7 @@ from agent_service.plugins.builtin_tools import (
     WeatherToolPlugin,
 )
 from agent_service.plugins.document_tools import DocumentIngestToolPlugin
-
+from agent_service.plugins.rag_tools import RagAskToolPlugin #rag_tool new
 
 class ToolRegistry:
     """
@@ -50,3 +50,4 @@ registry.register(MemorySaveToolPlugin())
 
 # Remote capability tools
 registry.register(DocumentIngestToolPlugin())
+registry.register(RagAskToolPlugin())

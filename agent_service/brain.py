@@ -183,6 +183,113 @@ def looks_like_weather_request(text: str) -> bool:
 
     return False
 
+#Document upload
+def looks_like_document_upload_request(text: str) -> bool:
+    """
+    Detect requests where the desktop should open a file picker and send the
+    selected file to document_service.
+    """
+    lower = text.lower().strip()
+
+    direct_phrases = [
+        "upload a document",
+        "upload document",
+        "upload a file",
+        "ingest a document",
+        "ingest document",
+        "ingest a file",
+        "import a document",
+        "add a document",
+    ]
+    if any(phrase in lower for phrase in direct_phrases):
+        return True
+    
+    upload_terms = ["upload", "ingest", "import", "add"]
+    document_terms = ["document", "file", "pdf", "docx", "csv", "image", "text file"]
+
+    return any(term in lower for term in upload_terms) and any(
+        term in lower for term in document_terms
+    )
+
+# rag
+def _candidate_document_ids(memories: List[MemoryItem]) -> list[str]:
+    """
+    Collect stable document ids from retrieved memory items.
+
+    We keep this helper simple and deterministic so the router can hand likely
+    document_ids to rag_service without inventing new state.
+    """
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    for memory in memories:
+        doc_id = memory.get("document_id") if isinstance(memory, dict) else memory.document_id
+        if not doc_id:
+            continue
+
+        doc_id = str(doc_id).strip()
+        if doc_id and doc_id not in seen:
+            seen.add(doc_id)
+            ordered.append(doc_id)
+
+    return ordered
+
+
+def looks_like_document_question(text: str, memories: List[MemoryItem]) -> bool:
+    """
+    Detect questions that should go to rag_service.
+
+    Why this exists:
+    - document-grounded answering should route to the dedicated RAG capability
+    - we want a deterministic fallback even if the router LLM is unavailable
+    """
+    lower = text.lower().strip()
+    document_ids = _candidate_document_ids(memories)
+
+    # Strong explicit document/file references.
+    direct_terms = [
+        "document",
+        "pdf",
+        "file",
+        "note",
+        "notes",
+        "slide",
+        "slides",
+        "lecture",
+        "report",
+        "paper",
+        "chapter",
+    ]
+
+    question_terms = [
+        "summarize",
+        "summary",
+        "explain",
+        "what does",
+        "what is in",
+        "what's in",
+        "tell me about",
+    ]
+
+    if any(term in lower for term in direct_terms) and any(term in lower for term in question_terms):
+        return True
+
+    # Follow-up style document questions become plausible when we already have
+    # known document ids in retrieved memory context.
+    if document_ids:
+        followup_terms = [
+            "summarize this",
+            "explain this",
+            "what does it say",
+            "what's it about",
+            "what is it about",
+            "what does this say",
+        ]
+        if any(term in lower for term in followup_terms):
+            return True
+
+    return False
+
 
 def llm_route(
     user_text: str,
@@ -242,6 +349,36 @@ def parse_route_decision(
             confidence=0.9,
             extracted_data={"location": location},
             tool_name="weather",
+        )
+
+    # Document-grounded Q&A
+    if "document_qa" in combined or "rag_ask" in combined or looks_like_document_question(user_text, memories):
+        return RouteDecision(
+            intent="document_qa",
+            confidence=0.9,
+            extracted_data={
+                "question": user_text,
+                "document_ids": _candidate_document_ids(memories),
+            },
+            tool_name="rag_ask",
+        )
+    
+        # Document upload / ingest
+    if looks_like_document_upload_request(user_text):
+        return RouteDecision(
+            intent="document_upload",
+            confidence=0.94,
+            action={
+                "type": "pick_and_ingest_document",
+                "payload": {
+                    "enable_ocr": True,
+                    "persist": True,
+                    "pdf_ocr_min_chars": 30,
+                    "chunk_size": 1200,
+                    "chunk_overlap": 200,
+                    "index_chunks_to_vector": True,
+                },
+            },
         )
 
     # Spotify playlist
@@ -359,12 +496,26 @@ def build_final_response(
     Phase 3B change:
     - richer memory context is available to the final response prompt
     - exact/document memory can now be surfaced more clearly
+
+    Phase 4 RAG hook:
+    - when rag_service already returned a grounded answer, return it directly
+      instead of paraphrasing it through the main chat model
     """
     if tool_used == "weather" and isinstance(tool_result, dict):
         return build_weather_response(user_text, tool_result)
 
     if tool_used == "memory_save" and isinstance(tool_result, dict):
         return build_memory_save_response(tool_result)
+
+    if tool_used == "rag_ask" and isinstance(tool_result, dict):
+        grounded_answer = str(tool_result.get("answer", "")).strip()
+        grounded_message = str(tool_result.get("message", "")).strip()
+
+        if grounded_answer:
+            return grounded_answer
+        if grounded_message:
+            return grounded_message
+        return "I couldn't find enough grounded evidence to answer that reliably."
 
     if action:
         return build_action_response(action)
@@ -444,6 +595,12 @@ def build_action_response(action: dict) -> str:
     if action_type == "spotify_play_playlist":
         playlist_name = payload.get("playlist_name", "that playlist")
         return f"I'm going to play the {playlist_name} playlist on Spotify."
+    
+    if action_type == "pick_and_ingest_document":
+        return (
+            "I'm opening the file picker. Choose the document you want me to "
+            "send to the document service."
+        )
 
     return "Okay, I'm doing that now."
 

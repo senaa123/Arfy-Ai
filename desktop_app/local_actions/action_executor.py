@@ -1,6 +1,6 @@
-from clients.spotify_client import play_playlist, play_song
-from integrations.app_control import close_app, open_app
-from integrations.spotify_desktop import ensure_spotify_ready
+from ..clients.spotify_client import play_playlist, play_song
+from ..integrations.app_control import close_app, open_app
+from ..integrations.spotify_desktop import ensure_spotify_ready
 
 
 SAFE_ACTIONS = {
