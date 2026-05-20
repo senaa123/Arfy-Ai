@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
-DOCUMENT_SERVICE_URL = os.getenv("DOCUMENT_SERVICE_URL", "http://127.0.0.1:8002")
+DOCUMENT_SERVICE_URL = os.getenv("DOCUMENT_SERVICE_URL")
 INGEST_TIMEOUT = 120
 
 
